@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IIoT (PAS) - NDT Bundle Tag Printing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: white;
+            min-height: 100vh;
+            font-size: 9pt;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: #F0F0F0;
+            height: 40px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .header-title {
+            font-size: 10pt;
+            font-weight: bold;
+            color: black;
+        }
+
+        .header-datetime {
+            font-size: 9pt;
+            color: black;
+        }
+
+        /* Filter Panel */
+        .filter-panel {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+        }
+
+        .filter-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .filter-label {
+            width: 50px;
+            font-size: 9pt;
+        }
+
+        .filter-control {
+            padding: 3px 5px;
+            border: 1px solid #DEDEE0;
+            border-radius: 3px;
+            font-size: 8pt;
+            height: 20px;
+        }
+
+        .filter-control.large {
+            width: 180px;
+        }
+
+        .filter-control.medium {
+            width: 150px;
+        }
+
+        .filter-control.small {
+            width: 60px;
+        }
+
+        .filter-control.pipe {
+            width: 90px;
+        }
+
+        .btn {
+            padding: 3px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 8pt;
+            height: 22px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #0078D7;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0066BB;
+        }
+
+        .btn-primary-bold {
+            background: #0078D7;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn-orange {
+            background: #FF8C00;
+            color: white;
+        }
+
+        .btn-orange:hover {
+            background: #E67A00;
+        }
+
+        .btn-shop {
+            width: 80px;
+            height: 22px;
+            background: #F0F0F0;
+            color: black;
+            border: 1px solid #ddd;
+        }
+
+        .btn-shop.active {
+            background: #3BB9FF;
+            color: black;
+        }
+
+        .filter-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 5px;
+        }
+
+        .search-box {
+            width: 200px;
+            height: 22px;
+            padding: 3px 5px;
+            border: 1px solid #DEDEE0;
+            border-radius: 3px;
+            font-size: 8pt;
+        }
+
+        /* Grid Toolbar */
+        .grid-toolbar {
+            background: #F0F0F0;
+            height: 35px;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        /* Data Grid */
+        .grid-container {
+            flex: 1;
+            overflow: auto;
+            background: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+
+        th {
+            background: #F0F0F0;
+            color: black;
+            font-weight: bold;
+            padding: 8px 5px;
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background: #E0E0E0;
+        }
+
+        td {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr {
+            background: white;
+        }
+
+        tr:nth-child(even) {
+            background: #FAFAFA;
+        }
+
+        tr:hover {
+            background: #F5F5F5;
+        }
+
+        tr.selected {
+            background: #0078D7 !important;
+            color: white;
+        }
+
+        tr.selected:hover {
+            background: #0066BB !important;
+        }
+
+        .number {
+            text-align: right;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .status-active {
+            color: green;
+        }
+
+        .status-completed {
+            color: blue;
+        }
+
+        .status-printed {
+            color: gray;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: #F0F0F0;
+            height: 30px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid #ddd;
+            font-size: 9pt;
+        }
+
+        .status-message {
+            flex: 1;
+        }
+
+        .record-count {
+            margin-left: auto;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 9pt;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #0078D7;
+            font-size: 9pt;
+        }
+
+        /* Context Menu */
+        .context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 9pt;
+        }
+
+        .context-menu-item:hover {
+            background: #F0F0F0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-title">IIoT (PAS) - NDT Bundle Tag Printing</div>
+        <div class="header-datetime" id="headerDateTime"></div>
+    </div>
+
+    <!-- Filter Panel -->
+    <div class="filter-panel">
+        <!-- Row 1: Date Range -->
+        <div class="filter-row">
+            <label class="filter-label">From:</label>
+            <input type="datetime-local" id="dtpFrom" class="filter-control large" value="">
+            <label class="filter-label">To:</label>
+            <input type="datetime-local" id="dtpTo" class="filter-control large" value="">
+        </div>
+
+        <!-- Row 2: PO and Pipe -->
+        <div class="filter-row">
+            <label class="filter-label">PO:</label>
+            <input type="text" id="txtPO" class="filter-control medium" placeholder="Select PO" list="poList">
+            <datalist id="poList"></datalist>
+            <label class="filter-label">Pipe:</label>
+            <input type="text" id="txtGrade" class="filter-control small" placeholder="Grade">
+            <input type="text" id="txtSize" class="filter-control pipe" placeholder="Size">
+            <input type="text" id="txtThick" class="filter-control small" placeholder="Thick">
+            <input type="text" id="txtLength" class="filter-control small" placeholder="Length">
+            <input type="text" id="txtType" class="filter-control small" placeholder="Type">
+        </div>
+
+        <!-- Row 3: HRC Batch and Slit No -->
+        <div class="filter-row">
+            <label class="filter-label">HRC Batch No:</label>
+            <select id="cmbHRCBatch" class="filter-control" style="width: 175px;">
+                <option value="">Select</option>
+            </select>
+            <label class="filter-label">Slit No:</label>
+            <select id="cmbSlitNo" class="filter-control" style="width: 175px;">
+                <option value="">Select</option>
+            </select>
+            <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
+        </div>
+
+        <!-- Row 4: Shop/Line Buttons -->
+        <div class="filter-row">
+            <label class="filter-label">Shop/Line:</label>
+            <button class="btn btn-shop" onclick="toggleShop(this, 'Mill1')">Mill 1</button>
+            <button class="btn btn-shop" onclick="toggleShop(this, 'Mill2')">Mill 2</button>
+            <button class="btn btn-shop" onclick="toggleShop(this, 'Mill3')">Mill 3</button>
+            <button class="btn btn-shop" onclick="toggleShop(this, 'Common')">Common</button>
+        </div>
+
+        <!-- Row 5: Action Buttons and Search -->
+        <div class="filter-row">
+            <div class="filter-actions">
+                <button class="btn btn-primary-bold" onclick="printSelectedBundles(false)">Print Bundles</button>
+                <button class="btn btn-primary" onclick="showViewLog()">View Log</button>
+                <input type="text" id="txtSearch" class="search-box" placeholder="Search bundles..." oninput="applyFilters()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="content-area">
+            <!-- Grid Toolbar -->
+            <div class="grid-toolbar">
+                <button class="btn btn-primary" onclick="exportToExcel()">Excel Export</button>
+            </div>
+
+            <!-- Data Grid -->
+            <div class="grid-container" id="gridContainer">
+                <div class="loading">Loading bundles...</div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-message" id="statusMessage">Ready</div>
+            <div class="record-count" id="recordCount"></div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="contextPrint(false)">Print Selected</div>
+        <div class="context-menu-item" onclick="contextPrint(true)">Reprint Selected</div>
+        <div class="context-menu-item" onclick="viewDetails()">View Details</div>
+        <div class="context-menu-item" onclick="exportToExcel()">Export to Excel</div>
+    </div>
+
+    <script>
+        let allBundles = [];
+        let filteredBundles = [];
+        let selectedBundleIds = new Set();
+        let activeShops = new Set();
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+            
+            // Set default dates
+            const now = new Date();
+            const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            document.getElementById('dtpFrom').value = formatDateForInput(oneMonthAgo);
+            document.getElementById('dtpTo').value = formatDateForInput(now);
+            
+            loadBundles();
+            initializeFilters();
+        });
+
+        function updateDateTime() {
+            const now = new Date();
+            document.getElementById('headerDateTime').textContent = formatDateTime(now);
+        }
+
+        function formatDateTime(date) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = months[date.getMonth()];
+            const year = String(date.getFullYear()).substring(2);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+        }
+
+        function formatDateForInput(date) {
+            return date.toISOString().slice(0, 16);
+        }
+
+        async function loadBundles() {
+            const container = document.getElementById('gridContainer');
+            container.innerHTML = '<div class="loading">Loading bundles...</div>';
+
+            try {
+                const response = await fetch('/api/bundles');
+                allBundles = await response.json();
+                applyFilters();
+                initializeFilters();
+            } catch (error) {
+                container.innerHTML = `<div class="no-data">Error loading bundles: ${error.message}</div>`;
+                updateStatus('Error loading bundles');
+            }
+        }
+
+        function initializeFilters() {
+            // Populate PO list
+            const poList = [...new Set(allBundles.map(b => {
+                // Try to get PO_No from bundle data
+                return b.po_No || 'N/A';
+            }))].filter(po => po !== 'N/A');
+            
+            const datalist = document.getElementById('poList');
+            datalist.innerHTML = '';
+            poList.forEach(po => {
+                const option = document.createElement('option');
+                option.value = po;
+                datalist.appendChild(option);
+            });
+
+            // Populate HRC Batch
+            const batches = [...new Set(allBundles.map(b => b.batch_No).filter(b => b))];
+            const cmbHRC = document.getElementById('cmbHRCBatch');
+            cmbHRC.innerHTML = '<option value="">Select</option>';
+            batches.forEach(batch => {
+                const option = document.createElement('option');
+                option.value = batch;
+                option.textContent = batch;
+                cmbHRC.appendChild(option);
+            });
+
+            // Populate Slit No
+            const slits = [...new Set(allBundles.map(b => b.po_Plan_ID).filter(s => s))];
+            const cmbSlit = document.getElementById('cmbSlitNo');
+            cmbSlit.innerHTML = '<option value="">Select</option>';
+            slits.forEach(slit => {
+                const option = document.createElement('option');
+                option.value = slit;
+                option.textContent = slit;
+                cmbSlit.appendChild(option);
+            });
+        }
+
+        function applyFilters() {
+            filteredBundles = [...allBundles];
+
+            // Date filter
+            const fromDate = new Date(document.getElementById('dtpFrom').value);
+            const toDate = new Date(document.getElementById('dtpTo').value);
+            filteredBundles = filteredBundles.filter(b => {
+                const startTime = new Date(b.bundleStartTime);
+                return startTime >= fromDate && startTime <= toDate;
+            });
+
+            // PO filter
+            const poFilter = document.getElementById('txtPO').value;
+            if (poFilter) {
+                filteredBundles = filteredBundles.filter(b => {
+                    const poNo = b.po_No || 'N/A';
+                    return poNo.toLowerCase().includes(poFilter.toLowerCase());
+                });
+            }
+
+            // Search filter
+            const searchText = document.getElementById('txtSearch').value.toLowerCase();
+            if (searchText) {
+                filteredBundles = filteredBundles.filter(b => {
+                    return (b.bundle_No || '').toLowerCase().includes(searchText) ||
+                           (b.batch_No || '').toLowerCase().includes(searchText) ||
+                           (b.po_No || 'N/A').toLowerCase().includes(searchText);
+                });
+            }
+
+            renderGrid();
+            updateStatusBar();
+        }
+
+        function renderGrid() {
+            const container = document.getElementById('gridContainer');
+            
+            if (filteredBundles.length === 0) {
+                container.innerHTML = '<div class="no-data">No bundles found. Adjust filters or add NDT cuts.</div>';
+                return;
+            }
+
+            let html = '<table><thead><tr>';
+            html += '<th onclick="sortGrid(\'bundle_No\')">Bundle No.</th>';
+            html += '<th onclick="sortGrid(\'batch_No\')">Batch No.</th>';
+            html += '<th onclick="sortGrid(\'po_No\')">PO Number</th>';
+            html += '<th onclick="sortGrid(\'ndt_Pcs\')" class="number">NDT Pcs</th>';
+            html += '<th onclick="sortGrid(\'bundle_Wt\')" class="number">Bundle Wt (Tons)</th>';
+            html += '<th onclick="sortGrid(\'status\')">Status</th>';
+            html += '<th onclick="sortGrid(\'bundleStartTime\')" class="number">Bundle Start Time</th>';
+            html += '<th onclick="sortGrid(\'bundleEndTime\')" class="number">Bundle End Time</th>';
+            html += '<th onclick="sortGrid(\'oprDoneTime\')" class="number">Opr Done Time</th>';
+            html += '<th onclick="sortGrid(\'isFullBundle\')" class="center">Is Full</th>';
+            html += '<th onclick="sortGrid(\'po_Plan_ID\')" class="number">Slit No.</th>';
+            html += '</tr></thead><tbody>';
+
+            filteredBundles.forEach(bundle => {
+                const status = bundle.status === 1 ? 'Active' : bundle.status === 2 ? 'Completed' : bundle.status === 3 ? 'Printed' : 'Unknown';
+                const statusClass = bundle.status === 1 ? 'status-active' : bundle.status === 2 ? 'status-completed' : 'status-printed';
+                const isSelected = selectedBundleIds.has(bundle.ndtBundle_ID);
+                const rowClass = isSelected ? 'selected' : '';
+                
+                html += `<tr class="${rowClass}" onclick="toggleSelection(${bundle.ndtBundle_ID}, event)" oncontextmenu="showContextMenu(event, ${bundle.ndtBundle_ID})">`;
+                html += `<td class="number">${bundle.bundle_No || ''}</td>`;
+                html += `<td>${bundle.batch_No || ''}</td>`;
+                html += `<td>${bundle.po_No || 'N/A'}</td>`;
+                html += `<td class="number">${bundle.ndt_Pcs}</td>`;
+                html += `<td class="number">${bundle.bundle_Wt.toFixed(2)}</td>`;
+                html += `<td class="${statusClass}">${status}</td>`;
+                html += `<td class="number">${formatDateTime(new Date(bundle.bundleStartTime))}</td>`;
+                html += `<td class="number">${bundle.bundleEndTime ? formatDateTime(new Date(bundle.bundleEndTime)) : '-'}</td>`;
+                html += `<td class="number">${bundle.oprDoneTime ? formatDateTime(new Date(bundle.oprDoneTime)) : '-'}</td>`;
+                html += `<td class="center">${bundle.isFullBundle ? '✓' : ''}</td>`;
+                html += `<td class="number">${bundle.po_Plan_ID || ''}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function toggleSelection(bundleId, event) {
+            if (event.ctrlKey || event.metaKey) {
+                // Multi-select with Ctrl/Cmd
+                if (selectedBundleIds.has(bundleId)) {
+                    selectedBundleIds.delete(bundleId);
+                } else {
+                    selectedBundleIds.add(bundleId);
+                }
+            } else {
+                // Single select
+                selectedBundleIds.clear();
+                selectedBundleIds.add(bundleId);
+            }
+            renderGrid();
+            updateStatusBar();
+        }
+
+        function showContextMenu(event, bundleId) {
+            event.preventDefault();
+            selectedBundleIds.clear();
+            selectedBundleIds.add(bundleId);
+            renderGrid();
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = event.pageX + 'px';
+            menu.style.top = event.pageY + 'px';
+            
+            document.addEventListener('click', function hideMenu() {
+                menu.style.display = 'none';
+                document.removeEventListener('click', hideMenu);
+            });
+        }
+
+        function toggleShop(button, shopName) {
+            if (activeShops.has(shopName)) {
+                activeShops.delete(shopName);
+                button.classList.remove('active');
+            } else {
+                activeShops.add(shopName);
+                button.classList.add('active');
+            }
+            applyFilters();
+        }
+
+        function sortGrid(column) {
+            filteredBundles.sort((a, b) => {
+                const aVal = a[column];
+                const bVal = b[column];
+                if (aVal < bVal) return -1;
+                if (aVal > bVal) return 1;
+                return 0;
+            });
+            renderGrid();
+        }
+
+        function updateStatusBar() {
+            const total = allBundles.length;
+            const filtered = filteredBundles.length;
+            const selected = selectedBundleIds.size;
+            document.getElementById('recordCount').textContent = `Total: ${total} | Filtered: ${filtered} | Selected: ${selected}`;
+        }
+
+        function updateStatus(message) {
+            document.getElementById('statusMessage').textContent = message;
+        }
+
+        async function printSelectedBundles(isReprint) {
+            if (selectedBundleIds.size === 0) {
+                alert('Please select at least one bundle to print.');
+                return;
+            }
+
+            const bundleIds = Array.from(selectedBundleIds);
+            let successCount = 0;
+
+            for (const bundleId of bundleIds) {
+                try {
+                    const response = await fetch(`/api/print/${bundleId}`, {
+                        method: 'POST'
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        successCount++;
+                    }
+                } catch (error) {
+                    console.error('Print error:', error);
+                }
+            }
+
+            updateStatus(`Printed ${successCount} of ${bundleIds.length} bundles`);
+            loadBundles();
+        }
+
+        function contextPrint(isReprint) {
+            printSelectedBundles(isReprint);
+        }
+
+        function viewDetails() {
+            if (selectedBundleIds.size === 0) return;
+            const bundleId = Array.from(selectedBundleIds)[0];
+            const bundle = allBundles.find(b => b.ndtBundle_ID === bundleId);
+            if (bundle) {
+                alert(`Bundle Details:\n\nBundle No: ${bundle.bundle_No}\nBatch No: ${bundle.batch_No}\nNDT Pieces: ${bundle.ndt_Pcs}\nBundle Weight: ${bundle.bundle_Wt} Tons\nStatus: ${bundle.status === 1 ? 'Active' : bundle.status === 2 ? 'Completed' : 'Printed'}`);
+            }
+        }
+
+        function exportToExcel() {
+            // Create CSV content
+            let csv = 'Bundle No,Batch No,PO Number,NDT Pcs,Bundle Wt (Tons),Status,Bundle Start Time,Bundle End Time,Opr Done Time,Is Full,Slit No\n';
+            
+            filteredBundles.forEach(bundle => {
+                const status = bundle.status === 1 ? 'Active' : bundle.status === 2 ? 'Completed' : 'Printed';
+                csv += `${bundle.bundle_No || ''},${bundle.batch_No || ''},${bundle.po_No || 'N/A'},${bundle.ndt_Pcs},${bundle.bundle_Wt.toFixed(2)},${status},${formatDateTime(new Date(bundle.bundleStartTime))},${bundle.bundleEndTime ? formatDateTime(new Date(bundle.bundleEndTime)) : '-'},${bundle.oprDoneTime ? formatDateTime(new Date(bundle.oprDoneTime)) : '-'},${bundle.isFullBundle ? 'Yes' : 'No'},${bundle.po_Plan_ID || ''}\n`;
+            });
+
+            // Download CSV
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `NDTBundleDetails_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            updateStatus('Excel export completed');
+        }
+
+        function showViewLog() {
+            alert('View Log functionality not implemented');
+        }
+    </script>
+</body>
+</html>
