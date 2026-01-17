@@ -6,11 +6,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NDTBundlePOC.Core.Services;
+using NDTBundlePOC.UI.Web.Hubs;
+using NDTBundlePOC.UI.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configuration (appsettings.json is automatically loaded in .NET 8)
-var plcIpAddress = builder.Configuration["PLC:IPAddress"] ?? "192.168.1.100";
+var plcIpAddress = builder.Configuration["PLC:IPAddress"] ?? "192.168.0.74";
 var plcRack = int.Parse(builder.Configuration["PLC:Rack"] ?? "0");
 var plcSlot = int.Parse(builder.Configuration["PLC:Slot"] ?? "1");
 var printerAddress = builder.Configuration["Printer:Address"] ?? "192.168.1.200";
@@ -21,6 +23,8 @@ var exportPath = builder.Configuration["Export:Path"];
 var enablePLCPolling = bool.Parse(builder.Configuration["PLC:EnablePolling"] ?? "false");
 var pollingIntervalMs = int.Parse(builder.Configuration["PLC:PollingIntervalMs"] ?? "1000");
 var millId = int.Parse(builder.Configuration["PLC:MillId"] ?? "1");
+var heartbeatPollingIntervalMs = int.Parse(builder.Configuration["PLC:HeartbeatPollingIntervalMs"] ?? "750");
+var enableHeartbeatMonitoring = bool.Parse(builder.Configuration["PLC:EnableHeartbeatMonitoring"] ?? "true");
 
 // Add services
 builder.Services.AddSingleton<IDataRepository, InMemoryDataRepository>();
@@ -39,6 +43,31 @@ builder.Services.AddSingleton<IPrinterService>(sp =>
 //     new HoneywellPD45SPrinterService(printerAddress, printerPort, useNetwork));
 
 builder.Services.AddSingleton<ExcelExportService>(sp => new ExcelExportService(exportPath));
+
+// Add SignalR for real-time communication
+builder.Services.AddSignalR();
+
+// Add Heartbeat Notifier (SignalR implementation)
+builder.Services.AddSingleton<IHeartbeatNotifier, HeartbeatNotifier>();
+
+// Add PLC Heartbeat Monitor Service as background service (if enabled)
+if (enableHeartbeatMonitoring)
+{
+    builder.Services.AddHostedService<PLCHeartbeatMonitorService>(sp =>
+    {
+        var plcService = sp.GetRequiredService<IPLCService>();
+        var notifier = sp.GetRequiredService<IHeartbeatNotifier>();
+        var logger = sp.GetRequiredService<ILogger<PLCHeartbeatMonitorService>>();
+        
+        return new PLCHeartbeatMonitorService(
+            plcService,
+            logger,
+            notifier,
+            plcIpAddress,
+            heartbeatPollingIntervalMs
+        );
+    });
+}
 
 // Add PLC Polling Service as background service (if enabled)
 if (enablePLCPolling)
@@ -71,25 +100,36 @@ var app = builder.Build();
 var repository = app.Services.GetRequiredService<IDataRepository>();
 ((InMemoryDataRepository)repository).InitializeDummyData();
 
-// Auto-connect to PLC if configured
+// Auto-connect to PLC if configured (for polling or heartbeat monitoring)
 var plcService = app.Services.GetRequiredService<IPLCService>();
-if (enablePLCPolling && !string.IsNullOrEmpty(plcIpAddress))
+if ((enablePLCPolling || enableHeartbeatMonitoring) && !string.IsNullOrEmpty(plcIpAddress))
 {
     Console.WriteLine($"Connecting to PLC at {plcIpAddress}...");
     bool connected = plcService.Connect(plcIpAddress, plcRack, plcSlot);
     if (connected)
     {
-        Console.WriteLine("✓ PLC connected. Polling service will start automatically.");
+        Console.WriteLine("✓ PLC connected.");
+        if (enablePLCPolling)
+        {
+            Console.WriteLine("  → Polling service will start automatically.");
+        }
+        if (enableHeartbeatMonitoring)
+        {
+            Console.WriteLine("  → Heartbeat monitoring service will start automatically.");
+        }
     }
     else
     {
-        Console.WriteLine("⚠ Failed to connect to PLC. Polling service will retry.");
+        Console.WriteLine("⚠ Failed to connect to PLC. Services will retry when connection is available.");
     }
 }
 
 // Configure static files
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Map SignalR hub
+app.MapHub<HeartbeatHub>("/heartbeathub");
 
 // API endpoints
 app.MapGet("/api/bundles", (INDTBundleService bundleService) =>
@@ -201,6 +241,41 @@ app.MapPost("/api/plc/disconnect", (IPLCService plcService) =>
 app.MapGet("/api/plc/status", (IPLCService plcService) =>
 {
     return Results.Ok(new { connected = plcService.IsConnected });
+});
+
+// PLC Heartbeat endpoint
+app.MapGet("/api/plc/heartbeat", (IPLCService plcService) =>
+{
+    try
+    {
+        if (!plcService.IsConnected)
+        {
+            return Results.Ok(new 
+            { 
+                heartbeatValue = -1, 
+                plcStatus = "OFFLINE",
+                plcIp = plcIpAddress,
+                lastUpdateTime = DateTime.UtcNow
+            });
+        }
+
+        int heartbeatValue = plcService.ReadHeartbeat();
+        // All values 1-127 indicate PLC is ONLINE (continuous counter)
+        // Value -1 indicates OFFLINE (not connected)
+        string plcStatus = (heartbeatValue >= 1 && heartbeatValue <= 127) ? "ONLINE" : "OFFLINE";
+
+        return Results.Ok(new 
+        { 
+            heartbeatValue = heartbeatValue, 
+            plcStatus = plcStatus,
+            plcIp = plcIpAddress,
+            lastUpdateTime = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
 });
 
 // Process cuts from PLC

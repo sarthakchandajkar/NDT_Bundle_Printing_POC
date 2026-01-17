@@ -16,6 +16,10 @@ namespace NDTBundlePOC.Core.Services
         private int _rack;
         private int _slot;
 
+        // Simulated heartbeat counter (for POC only - remove when using real PLC)
+        private int _simulatedHeartbeat = 0;
+        private DateTime _lastHeartbeatUpdate = DateTime.Now;
+
         public bool IsConnected => _isConnected; // _plc != null && _plc.IsConnected;
 
         public bool Connect(string ipAddress, int rack = 0, int slot = 1)
@@ -218,6 +222,67 @@ namespace NDTBundlePOC.Core.Services
             {
                 Console.WriteLine($"✗ Error reading PO End flag from PLC: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Read heartbeat value from PLC (DB1.DBW6 - L1_Heart_Beat)
+        /// Returns: Continuous counter from 1 to 127, then resets to 1
+        /// All values 1-127 indicate PLC is ONLINE and responding
+        /// </summary>
+        public int ReadHeartbeat()
+        {
+            try
+            {
+                if (!IsConnected)
+                {
+                    return -1; // Not connected
+                }
+
+                // TODO: Uncomment when S7netplus is installed
+                /*
+                // Read from DB1.DBW6 (L1_Heart_Beat)
+                var value = _plc.Read("DB1.DBW6");
+                if (value != null)
+                {
+                    if (value is ushort)
+                        return (short)(ushort)value; // Convert to signed INT
+                    else if (value is short)
+                        return (short)value;
+                    else if (value is int)
+                        return (int)value;
+                }
+                return -1; // Invalid value
+                */
+
+                // For POC: Simulate continuous heartbeat counter (1 → 2 → ... → 127 → 1)
+                // This simulates the correct PLC behavior where the value increments continuously
+                if (_simulatedHeartbeat == 0)
+                {
+                    _simulatedHeartbeat = 1; // Initialize
+                    _lastHeartbeatUpdate = DateTime.Now;
+                }
+
+                var now = DateTime.Now;
+                var elapsed = (now - _lastHeartbeatUpdate).TotalMilliseconds;
+
+                // Increment every 100ms to simulate PLC scan cycle
+                if (elapsed >= 100)
+                {
+                    _simulatedHeartbeat++;
+                    if (_simulatedHeartbeat > 127)
+                    {
+                        _simulatedHeartbeat = 1; // Reset to 1 after reaching 127
+                    }
+                    _lastHeartbeatUpdate = now;
+                }
+
+                return _simulatedHeartbeat;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error reading heartbeat from PLC: {ex.Message}");
+                return -1; // Error reading
             }
         }
     }

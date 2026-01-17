@@ -27,6 +27,9 @@ namespace NDTBundlePOC.Core.Services
         
         // Check if PO has ended
         bool IsPOEnded(int millId);
+        
+        // Read heartbeat value from PLC (DB1.DBW6)
+        int ReadHeartbeat();
     }
 }
 

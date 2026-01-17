@@ -1,9 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-// Uncomment when S7netplus is installed:
-// using S7netplus;
-// using S7netplus.Enums;
+using S7.Net;
 
 namespace NDTBundlePOC.Core.Services
 {
@@ -13,8 +11,7 @@ namespace NDTBundlePOC.Core.Services
     /// </summary>
     public class RealS7PLCService : IPLCService
     {
-        // Uncomment when S7netplus is installed:
-        // private Plc _plc;
+        private Plc _plc;
         private bool _isConnected = false;
         private string _ipAddress;
         private int _rack;
@@ -27,9 +24,7 @@ namespace NDTBundlePOC.Core.Services
             { 
                 lock (_lockObject)
                 {
-                    // Uncomment when S7netplus is installed:
-                    // return _plc != null && _plc.IsConnected;
-                    return _isConnected;
+                    return _plc != null && _plc.IsConnected;
                 }
             } 
         }
@@ -44,9 +39,9 @@ namespace NDTBundlePOC.Core.Services
                     _rack = rack;
                     _slot = slot;
 
-                    // TODO: Uncomment when S7netplus is installed
-                    /*
-                    _plc = new Plc(CpuType.S71200, ipAddress, rack, slot);
+                    try
+                    {
+                        _plc = new Plc(CpuType.S71200, ipAddress, (short)rack, (short)slot);
                     _plc.Open();
                     
                     if (_plc.IsConnected)
@@ -58,15 +53,16 @@ namespace NDTBundlePOC.Core.Services
                     else
                     {
                         Console.WriteLine($"✗ Failed to connect to PLC at {ipAddress}");
+                            _isConnected = false;
+                            return false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"✗ Error connecting to PLC at {ipAddress}: {ex.Message}");
+                        _isConnected = false;
                         return false;
                     }
-                    */
-
-                    // For now, simulate connection (remove when S7netplus is installed)
-                    _isConnected = true;
-                    Console.WriteLine($"✓ Connected to Siemens S7-1200 PLC at {ipAddress} (Rack: {rack}, Slot: {slot}) [SIMULATED]");
-                    Console.WriteLine($"⚠ Note: Install S7netplus package for real PLC connection");
-                    return true;
                 }
             }
             catch (Exception ex)
@@ -83,16 +79,12 @@ namespace NDTBundlePOC.Core.Services
             {
                 lock (_lockObject)
                 {
-                    // TODO: Uncomment when S7netplus is installed
-                    /*
                     if (_plc != null && _plc.IsConnected)
                     {
                         _plc.Close();
                         Console.WriteLine("✓ Disconnected from PLC");
                     }
-                    */
                     _isConnected = false;
-                    Console.WriteLine("✓ Disconnected from PLC");
                 }
             }
             catch (Exception ex)
@@ -343,6 +335,48 @@ namespace NDTBundlePOC.Core.Services
             {
                 Console.WriteLine($"✗ Error reading NDT Bundle Done from PLC: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Read heartbeat value from PLC (DB1.DBW6 - L1_Heart_Beat)
+        /// Returns: Continuous counter from 1 to 127, then resets to 1
+        /// All values 1-127 indicate PLC is ONLINE and responding
+        /// </summary>
+        public int ReadHeartbeat()
+        {
+            try
+            {
+                if (!IsConnected)
+                {
+                    return -1; // Not connected
+                }
+
+                // Read from DB1.DBW6 (L1_Heart_Beat)
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return -1; // Not connected
+                    }
+
+                    var value = _plc.Read("DB1.DBW6");
+                    if (value != null)
+                    {
+                        if (value is ushort)
+                            return (short)(ushort)value; // Convert to signed INT
+                        else if (value is short)
+                            return (short)value;
+                        else if (value is int)
+                            return (int)value;
+                    }
+                    return -1; // Invalid value
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error reading heartbeat from PLC: {ex.Message}");
+                return -1; // Error reading
             }
         }
 
