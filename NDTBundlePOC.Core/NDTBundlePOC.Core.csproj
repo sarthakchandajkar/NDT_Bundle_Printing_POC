@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <!-- Define TELERIK_REPORTING conditional compilation symbol when Telerik is installed -->
     <!-- <DefineConstants>$(DefineConstants);TELERIK_REPORTING</DefineConstants> -->
@@ -16,10 +16,10 @@
     <!-- Alternative: S7Net if S7netplus doesn't work -->
     <!-- <PackageReference Include="S7Net" Version="0.9.0" /> -->
     <!-- For serial port communication (printer) -->
-    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
     <!-- For background services -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
     <!-- Telerik Reporting -->
     <!-- NOTE: Telerik Reporting requires a license and private NuGet feed -->
     <!-- See TELERIK_SETUP.md for installation instructions -->

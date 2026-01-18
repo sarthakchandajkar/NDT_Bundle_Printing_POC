@@ -11,7 +11,7 @@ using NDTBundlePOC.UI.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration (appsettings.json is automatically loaded in .NET 8)
+// Configuration (appsettings.json is automatically loaded in .NET 10)
 var plcIpAddress = builder.Configuration["PLC:IPAddress"] ?? "192.168.0.74";
 var plcRack = int.Parse(builder.Configuration["PLC:Rack"] ?? "0");
 var plcSlot = int.Parse(builder.Configuration["PLC:Slot"] ?? "1");
