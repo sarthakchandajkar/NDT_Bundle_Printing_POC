@@ -34,13 +34,13 @@ builder.Services.AddSingleton<IOKBundleService, OKBundleService>();
 // Use RealS7PLCService for physical PLC connection
 builder.Services.AddSingleton<IPLCService>(sp => new RealS7PLCService());
 
-// Use Telerik Reporting for printing
+// Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands, not images)
 builder.Services.AddSingleton<IPrinterService>(sp => 
-    new TelerikReportingPrinterService(printerAddress, printerPort, useNetwork, reportTemplatePath));
+    new HoneywellPD45SPrinterService(printerAddress, printerPort, useNetwork));
 
-// Alternative: Use ZPL-based printing (uncomment if needed)
+// Alternative: Use Telerik Reporting for printing (generates images - use for Windows printers or if you have Telerik Reporting installed)
 // builder.Services.AddSingleton<IPrinterService>(sp => 
-//     new HoneywellPD45SPrinterService(printerAddress, printerPort, useNetwork));
+//     new TelerikReportingPrinterService(printerAddress, printerPort, useNetwork, reportTemplatePath));
 
 builder.Services.AddSingleton<ExcelExportService>(sp => new ExcelExportService(exportPath));
 

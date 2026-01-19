@@ -74,36 +74,67 @@ namespace NDTBundlePOC.Core.Services
                 string zplCommands = GenerateZPLCommands(printData);
                 byte[] zplBytes = Encoding.UTF8.GetBytes(zplCommands);
 
+                Console.WriteLine($"→ Attempting to connect to printer at {_printerAddress}:{_printerPort}...");
+                Console.WriteLine($"→ ZPL command length: {zplBytes.Length} bytes");
+
                 // Connect to printer via TCP/IP (port 9100 is standard for raw printing)
                 tcpClient = new TcpClient();
-                tcpClient.Connect(_printerAddress, _printerPort);
+                
+                // Set connection timeout (5 seconds)
+                var connectTask = tcpClient.ConnectAsync(_printerAddress, _printerPort);
+                if (!connectTask.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    Console.WriteLine($"✗ Connection timeout: Could not connect to printer at {_printerAddress}:{_printerPort} within 5 seconds");
+                    Console.WriteLine($"  → Check if printer is powered on and on the same network");
+                    Console.WriteLine($"  → Verify IP address: {_printerAddress}");
+                    Console.WriteLine($"  → Verify port: {_printerPort}");
+                    return false;
+                }
                 
                 if (!tcpClient.Connected)
                 {
                     Console.WriteLine($"✗ Failed to connect to printer at {_printerAddress}:{_printerPort}");
+                    Console.WriteLine($"  → Check network connectivity: ping {_printerAddress}");
                     return false;
                 }
+
+                Console.WriteLine($"✓ Connected to printer successfully");
 
                 // Send ZPL commands
                 stream = tcpClient.GetStream();
                 stream.Write(zplBytes, 0, zplBytes.Length);
                 stream.Flush();
 
+                Console.WriteLine($"✓ ZPL commands sent to printer ({zplBytes.Length} bytes)");
+
                 // Wait a bit for the print job to complete
-                Thread.Sleep(500);
+                Thread.Sleep(1000);
 
                 Console.WriteLine($"✓ NDT Bundle Tag printed via network ({_printerAddress}:{_printerPort}): {printData.BundleNo}");
                 return true;
             }
+            catch (SocketException ex)
+            {
+                Console.WriteLine($"✗ Network socket error: {ex.Message}");
+                Console.WriteLine($"  → Error code: {ex.SocketErrorCode}");
+                Console.WriteLine($"  → Check if printer at {_printerAddress}:{_printerPort} is reachable");
+                Console.WriteLine($"  → Try: ping {_printerAddress}");
+                return false;
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"✗ Network printing error: {ex.Message}");
+                Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
                 return false;
             }
             finally
             {
-                stream?.Close();
-                tcpClient?.Close();
+                try
+                {
+                    stream?.Close();
+                    tcpClient?.Close();
+                }
+                catch { }
             }
         }
 
@@ -150,63 +181,73 @@ namespace NDTBundlePOC.Core.Services
         private string GenerateZPLCommands(NDTBundlePrintData printData)
         {
             // Honeywell PD45S uses ZPL (Zebra Programming Language)
-            // Adjust these commands based on your actual label template
+            // This matches the Rpt_MillLabel design layout
             var zpl = new StringBuilder();
 
             // Start ZPL
             zpl.AppendLine("^XA"); // Start of label format
+            zpl.AppendLine("^CF0,0"); // Set default font
 
-            // Set label size (4x2 inches)
+            // Set label size (100mm x 100mm = ~394 dots x 394 dots at 203 DPI)
             zpl.AppendLine("^LH0,0"); // Label home position
-            zpl.AppendLine("^LL400"); // Label length (in dots, 203 DPI)
+            zpl.AppendLine("^LL394"); // Label length (in dots, 203 DPI)
 
-            // Title
-            zpl.AppendLine("^FO20,20^A0N,30,30^FDNDT BUNDLE TAG^FS");
+            // Header: "AJSPC - OMAN" (centered, bold)
+            zpl.AppendLine("^FO197,0^A0N,22,22^FB394,1,0,C^FDAJSPC - OMAN^FS");
 
-            // Bundle Number
-            zpl.AppendLine($"^FO20,60^A0N,25,25^FDBundle No:^FS");
-            zpl.AppendLine($"^FO20,90^A0N,30,30^FD{printData.BundleNo}^FS");
+            // Specification section
+            zpl.AppendLine("^FO0,71^A0N,18,18^FDSPECIFICATION^FS");
+            zpl.AppendLine($"^FO111,71^A0N,22,22^FB283,1,0,C^FD{printData.Pipe_Grade ?? "API 5L X42"}^FS");
 
-            // Batch Number
-            zpl.AppendLine($"^FO20,130^A0N,25,25^FDBatch No:^FS");
-            zpl.AppendLine($"^FO20,160^A0N,30,30^FD{printData.BatchNo}^FS");
+            // Type, Size, Length, Pcs/Bnd row
+            zpl.AppendLine("^FO0,111^A0N,20,20^FDType^FS");
+            zpl.AppendLine($"^FO0,139^A0N,18,18^FD{printData.Pipe_Grade ?? "ERW"}^FS");
 
-            // PO Number
-            zpl.AppendLine($"^FO20,200^A0N,25,25^FDPO No:^FS");
-            zpl.AppendLine($"^FO20,230^A0N,30,30^FD{printData.PO_No}^FS");
+            zpl.AppendLine("^FO111,111^A0N,20,20^FDSize^FS");
+            zpl.AppendLine($"^FO111,139^A0N,18,18^FD{printData.Pipe_Size ?? "4''"}^FS");
 
-            // NDT Pieces
-            zpl.AppendLine($"^FO20,270^A0N,25,25^FDNDT Pieces:^FS");
-            zpl.AppendLine($"^FO20,300^A0N,30,30^FD{printData.NDT_Pcs}^FS");
+            zpl.AppendLine("^FO189,111^A0N,20,20^FDLength^FS");
+            zpl.AppendLine($"^FO189,139^A0N,18,18^FD{printData.Pipe_Len}'^FS");
 
-            // Pipe Grade
-            zpl.AppendLine($"^FO20,340^A0N,25,25^FDPipe Grade:^FS");
-            zpl.AppendLine($"^FO20,370^A0N,30,30^FD{printData.Pipe_Grade}^FS");
+            zpl.AppendLine("^FO307,111^A0N,20,20^FDPcs/Bnd^FS");
+            zpl.AppendLine($"^FO307,139^A0N,18,18^FD{printData.NDT_Pcs}^FS");
 
-            // Pipe Size
-            zpl.AppendLine($"^FO220,60^A0N,25,25^FDPipe Size:^FS");
-            zpl.AppendLine($"^FO220,90^A0N,30,30^FD{printData.Pipe_Size}^FS");
+            // SLIT NUMBER
+            zpl.AppendLine("^FO0,173^A0N,18,18^FDSLIT NUMBER^FS");
+            zpl.AppendLine("^FO0,209^A0N,18,18^FDSLIT-001^FS");
 
-            // Pipe Length
-            zpl.AppendLine($"^FO220,130^A0N,25,25^FDPipe Length:^FS");
-            zpl.AppendLine($"^FO220,160^A0N,30,30^FD{printData.Pipe_Len} m^FS");
+            // BUNDLE NUMBER
+            zpl.AppendLine("^FO0,241^A0N,18,18^FDBUNDLE NUMBER^FS");
+            zpl.AppendLine($"^FO0,277^A0N,18,18^FD{printData.BundleNo}^FS");
 
-            // Start Time
-            zpl.AppendLine($"^FO220,200^A0N,20,20^FDStart: {printData.BundleStartTime:yyyy-MM-dd HH:mm:ss}^FS");
+            // Barcode (Code 128) - horizontal at top
+            zpl.AppendLine($"^FO0,0^BY2^BCN,36,Y,N,N^FD{printData.BundleNo}^FS");
 
-            // End Time
-            zpl.AppendLine($"^FO220,230^A0N,20,20^FDEnd: {printData.BundleEndTime:yyyy-MM-dd HH:mm:ss}^FS");
+            // Barcode (Code 128) - vertical (rotated 90 degrees) at right side
+            zpl.AppendLine($"^FO307,209^BY1^BCR,84,Y,N,N^FD{printData.BundleNo}^FS");
 
-            // Barcode (Code 128) for Bundle Number
-            zpl.AppendLine($"^FO20,400^BY2^BCN,50,Y,N,N^FD{printData.BundleNo}^FS");
-
-            // Print timestamp
-            zpl.AppendLine($"^FO220,270^A0N,20,20^FDPrinted: {DateTime.Now:yyyy-MM-dd HH:mm:ss}^FS");
+            // "MADE IN OMAN" (centered at bottom)
+            zpl.AppendLine("^FO0,335^A0N,24,24^FB394,1,0,C^FDMADE IN OMAN^FS");
 
             // End ZPL
             zpl.AppendLine("^XZ"); // End of label format
 
-            return zpl.ToString();
+            string zplCommands = zpl.ToString();
+            
+            // Save ZPL to file for debugging
+            try
+            {
+                string zplFileName = $"ZPL_{printData.BundleNo}_{DateTime.Now:yyyyMMddHHmmss}.zpl";
+                string zplFilePath = Path.Combine(_outputPath, zplFileName);
+                File.WriteAllText(zplFilePath, zplCommands);
+                Console.WriteLine($"→ ZPL commands saved to: {zplFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ Could not save ZPL file for debugging: {ex.Message}");
+            }
+
+            return zplCommands;
         }
 
         private bool PrintToFile(NDTBundlePrintData printData)
