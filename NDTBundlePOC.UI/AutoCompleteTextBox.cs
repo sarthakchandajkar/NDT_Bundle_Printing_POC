@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -24,6 +25,7 @@ namespace NDTBundlePOC.UI
             this.Leave += AutoCompleteTextBox_Leave;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public List<string> DataSource
         {
             get => _dataSource;
@@ -34,13 +36,15 @@ namespace NDTBundlePOC.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string FilterMode
         {
             get => _filterMode;
             set => _filterMode = value ?? "startswith";
         }
 
-        public string PlaceholderText
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new string PlaceholderText
         {
             get => _placeholderText;
             set

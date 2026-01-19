@@ -538,8 +538,9 @@ namespace NDTBundlePOC.UI
             if (_bundlesGrid.Columns.Count == 0) return;
 
             // Hide ID column
-            if (_bundlesGrid.Columns["NDTBundle_ID"] != null)
-                _bundlesGrid.Columns["NDTBundle_ID"].Visible = false;
+            var idColumn = _bundlesGrid.Columns["NDTBundle_ID"];
+            if (idColumn != null)
+                idColumn.Visible = false;
 
             ConfigureColumn("Bundle_No", "Bundle No.", 7, DataGridViewContentAlignment.MiddleRight);
             ConfigureColumn("Batch_No", "Batch No.", 7);
@@ -554,11 +555,13 @@ namespace NDTBundlePOC.UI
             ConfigureColumn("Slit_No", "Slit No.", 7, DataGridViewContentAlignment.MiddleRight);
 
             // Color code Status column
-            if (_bundlesGrid.Columns["Status"] != null)
+            var statusColumn = _bundlesGrid.Columns["Status"];
+            if (statusColumn != null)
             {
+                int statusColumnIndex = statusColumn.Index;
                 _bundlesGrid.CellFormatting += (s, e) =>
                 {
-                    if (e.ColumnIndex == _bundlesGrid.Columns["Status"].Index && e.Value != null)
+                    if (e.ColumnIndex == statusColumnIndex && e.Value != null)
                     {
                         var status = e.Value.ToString();
                         if (status == "Active")
@@ -572,11 +575,13 @@ namespace NDTBundlePOC.UI
             }
         }
 
-        private void ConfigureColumn(string name, string header, int widthPercent, DataGridViewContentAlignment alignment = DataGridViewContentAlignment.MiddleLeft, string format = null)
+        private void ConfigureColumn(string name, string header, int widthPercent, DataGridViewContentAlignment alignment = DataGridViewContentAlignment.MiddleLeft, string? format = null)
         {
             if (_bundlesGrid.Columns[name] == null) return;
             
             var col = _bundlesGrid.Columns[name];
+            if (col == null) return;
+            
             col.HeaderText = header;
             col.Width = (int)(_bundlesGrid.Width * widthPercent / 100.0);
             col.DefaultCellStyle.Alignment = alignment;
@@ -656,7 +661,7 @@ namespace NDTBundlePOC.UI
         {
             if (sender is Button btn)
             {
-                bool isActive = (bool)btn.Tag;
+                bool isActive = btn.Tag is bool tagValue && tagValue;
                 btn.Tag = !isActive;
                 
                 if (!isActive)
@@ -696,9 +701,12 @@ namespace NDTBundlePOC.UI
             if (selectedRows.Count == 1)
             {
                 // Single bundle - show dialog
-                var bundleId = (int)selectedRows[0].Cells["NDTBundle_ID"].Value;
-                var bundleNo = selectedRows[0].Cells["Bundle_No"].Value?.ToString() ?? "";
-                ShowPrintDialog(bundleNo, isReprint, bundleId);
+                var bundleIdValue = selectedRows[0].Cells["NDTBundle_ID"].Value;
+                if (bundleIdValue is int bundleId)
+                {
+                    var bundleNo = selectedRows[0].Cells["Bundle_No"].Value?.ToString() ?? "";
+                    ShowPrintDialog(bundleNo, isReprint, bundleId);
+                }
             }
             else
             {
@@ -774,7 +782,9 @@ namespace NDTBundlePOC.UI
             var selectedRow = _bundlesGrid.SelectedRows.Cast<DataGridViewRow>().FirstOrDefault();
             if (selectedRow == null) return;
 
-            int bundleId = (int)selectedRow.Cells["NDTBundle_ID"].Value;
+            var bundleIdValue = selectedRow.Cells["NDTBundle_ID"].Value;
+            if (bundleIdValue is not int bundleId) return;
+            
             var bundle = _repository.GetNDTBundle(bundleId);
             if (bundle == null) return;
 
