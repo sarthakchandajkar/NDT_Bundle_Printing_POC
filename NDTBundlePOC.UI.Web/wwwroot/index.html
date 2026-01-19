@@ -442,6 +442,82 @@
             font-size: 9pt;
             font-style: italic;
         }
+
+        /* Test Print Section */
+        .test-print-section {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .test-print-header {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+
+        .test-print-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-test-print {
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9pt;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn-test-print:hover {
+            background: #218838;
+        }
+
+        .btn-test-print:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .test-print-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 9pt;
+            display: none;
+        }
+
+        .test-print-result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }
+
+        .test-print-result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }
+
+        .test-print-result.loading {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -483,6 +559,16 @@
                 <div class="heartbeat-field-value" id="heartbeatLastUpdate">-</div>
             </div>
         </div>
+    </div>
+
+    <!-- Test Print Section -->
+    <div class="test-print-section" id="testPrintSection">
+        <div class="test-print-header">Test Printer</div>
+        <div class="test-print-controls">
+            <button class="btn-test-print" id="btnTestPrint" onclick="testPrint()">Test Print Label</button>
+            <span style="font-size: 8pt; color: #666;">Prints a test label with dummy data to verify printer connection</span>
+        </div>
+        <div class="test-print-result" id="testPrintResult"></div>
     </div>
 
     <!-- Filter Panel -->
@@ -714,6 +800,60 @@
                 // No data yet, show placeholder
                 placeholder.style.display = 'block';
                 content.style.display = 'none';
+            }
+        }
+
+        // Test Print Function
+        async function testPrint() {
+            const btn = document.getElementById('btnTestPrint');
+            const resultDiv = document.getElementById('testPrintResult');
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            resultDiv.className = 'test-print-result loading';
+            resultDiv.textContent = 'Printing test label...';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/test-print', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'test-print-result success';
+                    resultDiv.innerHTML = `
+                        <strong>✓ Success!</strong><br>
+                        ${data.message}<br>
+                        <small style="margin-top: 5px; display: block;">
+                            Bundle: ${data.printData?.bundleNo || 'N/A'} | 
+                            PO: ${data.printData?.PO_No || 'N/A'} | 
+                            Grade: ${data.printData?.Pipe_Grade || 'N/A'}
+                        </small>
+                    `;
+                } else {
+                    resultDiv.className = 'test-print-result error';
+                    resultDiv.innerHTML = `
+                        <strong>✗ Print Failed</strong><br>
+                        ${data.message || 'Unknown error occurred'}
+                    `;
+                }
+            } catch (error) {
+                resultDiv.className = 'test-print-result error';
+                resultDiv.innerHTML = `
+                    <strong>✗ Error</strong><br>
+                    Failed to connect to server: ${error.message}<br>
+                    <small>Make sure the application is running and check the console for details.</small>
+                `;
+            } finally {
+                // Re-enable button after 2 seconds
+                setTimeout(() => {
+                    btn.disabled = false;
+                }, 2000);
             }
         }
 
