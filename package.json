@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@progress/telerik-reporting-schematics": "^28.25.1119"
+  }
+}

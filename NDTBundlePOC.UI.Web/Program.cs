@@ -314,4 +314,53 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
     }
 });
 
+// Test print endpoint with dummy data using mock Rpt_MillLabel design
+app.MapPost("/api/test-print", (IPrinterService printerService) =>
+{
+    try
+    {
+        // Create dummy print data matching Rpt_MillLabel structure
+        var dummyPrintData = new NDTBundlePrintData
+        {
+            BundleNo = "TEST-001",
+            BatchNo = "BATCH-2024-001",
+            PO_No = "PO-12345",
+            NDT_Pcs = 10,
+            Pipe_Grade = "API 5L X42",
+            Pipe_Size = "4''",
+            Pipe_Len = 12.5m,
+            BundleStartTime = DateTime.Now.AddHours(-2),
+            BundleEndTime = DateTime.Now
+        };
+
+        // Print using the printer service (will use mock Rpt_MillLabel design)
+        bool printed = printerService.PrintNDTBundleTag(dummyPrintData);
+        
+        if (printed)
+        {
+            return Results.Ok(new 
+            { 
+                success = true, 
+                message = $"Test label printed successfully to printer at {printerAddress}:{printerPort}",
+                printData = new
+                {
+                    dummyPrintData.BundleNo,
+                    dummyPrintData.BatchNo,
+                    dummyPrintData.PO_No,
+                    dummyPrintData.NDT_Pcs,
+                    dummyPrintData.Pipe_Grade,
+                    dummyPrintData.Pipe_Size,
+                    dummyPrintData.Pipe_Len
+                }
+            });
+        }
+
+        return Results.BadRequest(new { success = false, message = "Print failed - check printer connection and console logs" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message, stackTrace = ex.StackTrace });
+    }
+});
+
 app.Run();

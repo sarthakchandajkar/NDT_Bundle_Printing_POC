@@ -105,8 +105,8 @@ namespace NDTBundlePOC.Core.Services
                 }
                 else
                 {
-                    // Create report programmatically
-                    report = CreateReportProgrammatically(printData);
+                    // Create mock Rpt_MillLabel report (matches original Rpt_MillLabel design)
+                    report = CreateMockMillLabelReport(printData);
                 }
 
                 // Set report parameters if they exist
@@ -245,6 +245,339 @@ namespace NDTBundlePOC.Core.Services
             textBox.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(fontSize, Telerik.Reporting.Drawing.UnitType.Point);
             textBox.Style.Font.Bold = bold;
             report.Items.Add(textBox);
+        }
+
+        /// <summary>
+        /// Creates a mock Rpt_MillLabel report matching the original design
+        /// This is used for testing without requiring database connection
+        /// </summary>
+        private Report CreateMockMillLabelReport(NDTBundlePrintData printData)
+        {
+            Report report = new Report();
+            report.Name = "Rpt_MillLabel_Mock";
+            report.PageSettings.PaperKind = System.Drawing.Printing.PaperKind.Custom;
+            report.PageSettings.Width = new Telerik.Reporting.Drawing.Unit(100, Telerik.Reporting.Drawing.UnitType.Mm);
+            report.PageSettings.Height = new Telerik.Reporting.Drawing.Unit(100, Telerik.Reporting.Drawing.UnitType.Mm);
+            report.PageSettings.Margins = new Telerik.Reporting.Drawing.MarginsU(
+                Telerik.Reporting.Drawing.Unit.Mm(0),
+                Telerik.Reporting.Drawing.Unit.Mm(0),
+                Telerik.Reporting.Drawing.Unit.Mm(0),
+                Telerik.Reporting.Drawing.Unit.Mm(0));
+
+            DetailSection detail = new DetailSection();
+            detail.Height = new Telerik.Reporting.Drawing.Unit(9.7, Telerik.Reporting.Drawing.UnitType.Cm);
+            detail.Style.Padding.Top = new Telerik.Reporting.Drawing.Unit(0, Telerik.Reporting.Drawing.UnitType.Cm);
+
+            Panel panel1 = new Panel();
+            panel1.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Mm(2), Telerik.Reporting.Drawing.Unit.Mm(2));
+            panel1.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Cm(9.7), Telerik.Reporting.Drawing.Unit.Cm(9.5));
+            panel1.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            panel1.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+
+            // Header: "AJSPC - OMAN" (textBox5)
+            TextBox textBox5 = new TextBox();
+            textBox5.Name = "textBox5";
+            textBox5.Value = "AJSPC - OMAN";
+            textBox5.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(4.8), Telerik.Reporting.Drawing.Unit.Cm(0));
+            textBox5.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.181), Telerik.Reporting.Drawing.Unit.Inch(0.709));
+            textBox5.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox5.Style.Font.Bold = true;
+            textBox5.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox5.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(11, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox5.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox5.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            textBox5.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox5);
+
+            // PictureBox1 (logo placeholder - using text for now)
+            TextBox pictureBox1 = new TextBox();
+            pictureBox1.Name = "PictureBox1";
+            pictureBox1.Value = "[LOGO]";
+            pictureBox1.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Inch(3.071), Telerik.Reporting.Drawing.Unit.Inch(0));
+            pictureBox1.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.748), Telerik.Reporting.Drawing.Unit.Inch(0.709));
+            pictureBox1.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            pictureBox1.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            pictureBox1.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            pictureBox1.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(pictureBox1);
+
+            // SPECIFICATION label (textBox6)
+            TextBox textBox6 = new TextBox();
+            textBox6.Name = "textBox6";
+            textBox6.Value = "SPECIFICATION";
+            textBox6.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(1.8));
+            textBox6.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.102), Telerik.Reporting.Drawing.Unit.Inch(0.394));
+            textBox6.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox6.Style.Font.Bold = true;
+            textBox6.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox6.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox6.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox6.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox6.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox6);
+
+            // Specification value (textSpecification)
+            TextBox textSpecification = new TextBox();
+            textSpecification.Name = "textSpecification";
+            textSpecification.Value = printData.Pipe_Grade ?? "API 5L X42";
+            textSpecification.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(2.8), Telerik.Reporting.Drawing.Unit.Cm(1.8));
+            textSpecification.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(2.716), Telerik.Reporting.Drawing.Unit.Inch(0.394));
+            textSpecification.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textSpecification.Style.Font.Bold = false;
+            textSpecification.Style.Font.Name = "Microsoft New Tai Lue";
+            textSpecification.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(11, Telerik.Reporting.Drawing.UnitType.Point);
+            textSpecification.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textSpecification.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            textSpecification.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textSpecification);
+
+            // Type label (textBox7)
+            TextBox textBox7 = new TextBox();
+            textBox7.Name = "textBox7";
+            textBox7.Value = "Type";
+            textBox7.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(2.8));
+            textBox7.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.102), Telerik.Reporting.Drawing.Unit.Inch(0.276));
+            textBox7.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox7.Style.Font.Bold = true;
+            textBox7.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox7.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(10, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox7.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox7.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox7.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox7);
+
+            // Type value (textType)
+            TextBox textType = new TextBox();
+            textType.Name = "textType";
+            textType.Value = printData.Pipe_Grade ?? "ERW";
+            textType.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(3.5));
+            textType.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.102), Telerik.Reporting.Drawing.Unit.Inch(0.349));
+            textType.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textType.Style.Font.Bold = false;
+            textType.Style.Font.Name = "Microsoft New Tai Lue";
+            textType.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textType.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textType.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textType.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textType);
+
+            // Size label (textBox1)
+            TextBox textBox1 = new TextBox();
+            textBox1.Name = "textBox1";
+            textBox1.Value = "Size";
+            textBox1.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(2.8), Telerik.Reporting.Drawing.Unit.Cm(2.8));
+            textBox1.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.787), Telerik.Reporting.Drawing.Unit.Inch(0.276));
+            textBox1.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox1.Style.Font.Bold = true;
+            textBox1.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox1.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(10, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox1.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox1.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox1.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox1);
+
+            // Size value (textSize)
+            TextBox textSize = new TextBox();
+            textSize.Name = "textSize";
+            textSize.Value = printData.Pipe_Size ?? "4''";
+            textSize.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(2.8), Telerik.Reporting.Drawing.Unit.Cm(3.5));
+            textSize.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.787), Telerik.Reporting.Drawing.Unit.Inch(0.349));
+            textSize.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textSize.Style.Font.Bold = false;
+            textSize.Style.Font.Name = "Microsoft New Tai Lue";
+            textSize.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textSize.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textSize.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textSize.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textSize);
+
+            // Length label (textBox2)
+            TextBox textBox2 = new TextBox();
+            textBox2.Name = "textBox2";
+            textBox2.Value = "Length";
+            textBox2.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(4.8), Telerik.Reporting.Drawing.Unit.Cm(2.8));
+            textBox2.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.181), Telerik.Reporting.Drawing.Unit.Inch(0.276));
+            textBox2.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox2.Style.Font.Bold = true;
+            textBox2.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox2.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(10, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox2.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox2.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox2.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox2);
+
+            // Length value (textLen)
+            TextBox textLen = new TextBox();
+            textLen.Name = "textLen";
+            textLen.Value = $"{printData.Pipe_Len}'";
+            textLen.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(4.8), Telerik.Reporting.Drawing.Unit.Cm(3.5));
+            textLen.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.181), Telerik.Reporting.Drawing.Unit.Inch(0.349));
+            textLen.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textLen.Style.Font.Bold = false;
+            textLen.Style.Font.Name = "Microsoft New Tai Lue";
+            textLen.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textLen.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textLen.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textLen.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textLen);
+
+            // Pcs/Bnd label (textBox9)
+            TextBox textBox9 = new TextBox();
+            textBox9.Name = "textBox9";
+            textBox9.Value = "Pcs/Bnd";
+            textBox9.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(7.8), Telerik.Reporting.Drawing.Unit.Cm(2.8));
+            textBox9.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.748), Telerik.Reporting.Drawing.Unit.Inch(0.276));
+            textBox9.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox9.Style.Font.Bold = true;
+            textBox9.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox9.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(10, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox9.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox9.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox9.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox9);
+
+            // Pcs/Bnd value (textPcsBund)
+            TextBox textPcsBund = new TextBox();
+            textPcsBund.Name = "textPcsBund";
+            textPcsBund.Value = printData.NDT_Pcs.ToString();
+            textPcsBund.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(7.8), Telerik.Reporting.Drawing.Unit.Cm(3.5));
+            textPcsBund.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.748), Telerik.Reporting.Drawing.Unit.Inch(0.349));
+            textPcsBund.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textPcsBund.Style.Font.Bold = false;
+            textPcsBund.Style.Font.Name = "Microsoft New Tai Lue";
+            textPcsBund.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textPcsBund.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textPcsBund.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textPcsBund.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textPcsBund);
+
+            // SLIT NUMBER label (textBox8)
+            TextBox textBox8 = new TextBox();
+            textBox8.Name = "textBox8";
+            textBox8.Value = "SLIT NUMBER";
+            textBox8.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(4.386));
+            textBox8.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.299), Telerik.Reporting.Drawing.Unit.Inch(0.36));
+            textBox8.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.None;
+            textBox8.Style.Font.Bold = true;
+            textBox8.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox8.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox8.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox8.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox8.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox8);
+
+            // Slit Number value (textBox3)
+            TextBox textBox3 = new TextBox();
+            textBox3.Name = "textBox3";
+            textBox3.Value = "SLIT-001";
+            textBox3.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(5.3));
+            textBox3.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.299), Telerik.Reporting.Drawing.Unit.Inch(0.315));
+            textBox3.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.None;
+            textBox3.Style.Font.Bold = false;
+            textBox3.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox3.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox3.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox3.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox3.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox3);
+
+            // BUNDLE NUMBER label (textBox10)
+            TextBox textBox10 = new TextBox();
+            textBox10.Name = "textBox10";
+            textBox10.Value = "BUNDLE NUMBER";
+            textBox10.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(6.1));
+            textBox10.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.299), Telerik.Reporting.Drawing.Unit.Inch(0.354));
+            textBox10.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.None;
+            textBox10.Style.Font.Bold = true;
+            textBox10.Style.Font.Name = "Microsoft New Tai Lue";
+            textBox10.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox10.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox10.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBox10.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox10);
+
+            // Bundle Number value (textBundleNo)
+            TextBox textBundleNo = new TextBox();
+            textBundleNo.Name = "textBundleNo";
+            textBundleNo.Value = printData.BundleNo;
+            textBundleNo.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(7));
+            textBundleNo.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(1.299), Telerik.Reporting.Drawing.Unit.Inch(0.315));
+            textBundleNo.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.None;
+            textBundleNo.Style.Font.Bold = false;
+            textBundleNo.Style.Font.Name = "Microsoft New Tai Lue";
+            textBundleNo.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(9, Telerik.Reporting.Drawing.UnitType.Point);
+            textBundleNo.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBundleNo.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Left;
+            textBundleNo.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBundleNo);
+
+            // Barcode 1 (horizontal)
+            Barcode barcode1 = new Barcode();
+            barcode1.Name = "barcode1";
+            barcode1.Encoder = new Telerik.Reporting.Barcodes.Code128Encoder();
+            barcode1.Value = printData.BundleNo;
+            barcode1.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Mm(0), Telerik.Reporting.Drawing.Unit.Mm(0));
+            barcode1.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Mm(48), Telerik.Reporting.Drawing.Unit.Mm(18));
+            barcode1.Stretch = false;
+            barcode1.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            barcode1.Style.Font.Name = "Calibri";
+            barcode1.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(12, Telerik.Reporting.Drawing.UnitType.Point);
+            barcode1.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            barcode1.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            barcode1.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Bottom;
+            panel1.Items.Add(barcode1);
+
+            // Barcode 2 (vertical - rotated 90 degrees)
+            Barcode barcode2 = new Barcode();
+            barcode2.Name = "barcode2";
+            barcode2.Encoder = new Telerik.Reporting.Barcodes.Code128Encoder();
+            barcode2.Angle = 90;
+            barcode2.Value = printData.BundleNo;
+            barcode2.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Mm(78), Telerik.Reporting.Drawing.Unit.Mm(53));
+            barcode2.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Mm(19), Telerik.Reporting.Drawing.Unit.Mm(42));
+            barcode2.Stretch = false;
+            barcode2.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            barcode2.Style.Font.Name = "Calibri";
+            barcode2.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(12, Telerik.Reporting.Drawing.UnitType.Point);
+            barcode2.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            barcode2.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            barcode2.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Bottom;
+            panel1.Items.Add(barcode2);
+
+            // "MADE IN OMAN" (textBox4)
+            TextBox textBox4 = new TextBox();
+            textBox4.Name = "textBox4";
+            textBox4.Value = "MADE IN OMAN";
+            textBox4.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(8.5));
+            textBox4.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(3.071), Telerik.Reporting.Drawing.Unit.Inch(0.394));
+            textBox4.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.Solid;
+            textBox4.Style.Font.Bold = true;
+            textBox4.Style.Font.Name = "Malgun Gothic";
+            textBox4.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(12, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox4.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            textBox4.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Center;
+            textBox4.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Middle;
+            panel1.Items.Add(textBox4);
+
+            // Reprint indicator (reprintInd) - empty for new prints
+            TextBox reprintInd = new TextBox();
+            reprintInd.Name = "reprintInd";
+            reprintInd.Value = "";
+            reprintInd.Location = new Telerik.Reporting.Drawing.PointU(Telerik.Reporting.Drawing.Unit.Cm(0), Telerik.Reporting.Drawing.Unit.Cm(8.5));
+            reprintInd.Size = new Telerik.Reporting.Drawing.SizeU(Telerik.Reporting.Drawing.Unit.Inch(0.394), Telerik.Reporting.Drawing.Unit.Inch(0.394));
+            reprintInd.Style.BorderStyle.Default = Telerik.Reporting.Drawing.BorderType.None;
+            reprintInd.Style.Font.Bold = false;
+            reprintInd.Style.Font.Name = "Microsoft New Tai Lue";
+            reprintInd.Style.Font.Size = new Telerik.Reporting.Drawing.Unit(25, Telerik.Reporting.Drawing.UnitType.Point);
+            reprintInd.Style.LineWidth = new Telerik.Reporting.Drawing.Unit(3, Telerik.Reporting.Drawing.UnitType.Point);
+            reprintInd.Style.TextAlign = Telerik.Reporting.Drawing.HorizontalAlign.Right;
+            reprintInd.Style.VerticalAlign = Telerik.Reporting.Drawing.VerticalAlign.Top;
+            panel1.Items.Add(reprintInd);
+
+            detail.Items.Add(panel1);
+            report.Items.Add(detail);
+
+            return report;
         }
 #endif
 
