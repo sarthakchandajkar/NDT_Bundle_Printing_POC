@@ -324,6 +324,18 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
+                // Check if error is due to address out of range (DB250.DBX3.4 may not be configured)
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
+                {
+                    // Silently return false if address is out of range (DB250.DBX3.4 may not be configured)
+                    return false;
+                }
+                
                 Console.WriteLine($"✗ Error reading OK Bundle Done from PLC: {ex.Message}");
                 return false;
             }
@@ -361,13 +373,15 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
-                // Check if error is due to object not existing (common when DB block not configured)
+                // Check if error is due to object not existing or address out of range (common when DB block not configured)
                 string errorMsg = ex.Message?.ToLower() ?? "";
                 if (errorMsg.Contains("object does not exist") || 
                     errorMsg.Contains("does not exist") ||
-                    errorMsg.Contains("not found"))
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
                 {
-                    // Silently return false if object doesn't exist (DB250.DBX6.0 may not be configured)
+                    // Silently return false if object doesn't exist or address is out of range (DB250.DBX6.0 may not be configured)
                     return false;
                 }
                 
@@ -415,13 +429,15 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
-                // Check if error is due to object not existing (common when DB block not configured)
+                // Check if error is due to object not existing or address out of range (common when DB block not configured)
                 string errorMsg = ex.Message?.ToLower() ?? "";
                 if (errorMsg.Contains("object does not exist") || 
                     errorMsg.Contains("does not exist") ||
-                    errorMsg.Contains("not found"))
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
                 {
-                    // Silently return -1 if object doesn't exist (DB1.DBW6 may not be configured)
+                    // Silently return -1 if object doesn't exist or address is out of range (DB1.DBW6 may not be configured)
                     return -1;
                 }
                 

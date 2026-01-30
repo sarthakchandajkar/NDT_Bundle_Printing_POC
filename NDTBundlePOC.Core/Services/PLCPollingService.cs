@@ -178,14 +178,16 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
-                // Check if error is due to object not existing (DB250.DBX6.0 may not be configured)
+                // Check if error is due to object not existing or address out of range (DB250.DBX6.0 may not be configured)
                 string errorMsg = ex.Message?.ToLower() ?? "";
                 if (errorMsg.Contains("object does not exist") || 
                     errorMsg.Contains("does not exist") ||
-                    errorMsg.Contains("not found"))
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
                 {
                     // Silently handle missing NDT Bundle Done signal - just return false
-                    _logger?.LogDebug("NDT Bundle Done signal (DB250.DBX6.0) not found in PLC - using bundle completion logic instead");
+                    _logger?.LogDebug("NDT Bundle Done signal (DB250.DBX6.0) not found or out of range in PLC - using bundle completion logic instead");
                     return false;
                 }
                 else

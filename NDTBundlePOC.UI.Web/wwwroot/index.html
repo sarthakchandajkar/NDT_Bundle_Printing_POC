@@ -346,103 +346,6 @@
             background: #F0F0F0;
         }
 
-        /* PLC Heartbeat Monitor Component */
-        .heartbeat-monitor {
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .heartbeat-monitor-header {
-            font-size: 11pt;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 8px;
-        }
-
-        .heartbeat-monitor-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .heartbeat-field {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .heartbeat-field-label {
-            font-size: 8pt;
-            color: #666;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .heartbeat-field-value {
-            font-size: 10pt;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .heartbeat-field-value.status-online {
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .heartbeat-field-value.status-waiting {
-            color: #ffc107;
-            font-weight: bold;
-        }
-
-        .heartbeat-field-value.status-offline {
-            color: #dc3545;
-            font-weight: bold;
-        }
-
-        .heartbeat-status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-        }
-
-        .status-dot.online {
-            background-color: #28a745;
-            box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
-        }
-
-        .status-dot.waiting {
-            background-color: #ffc107;
-            box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
-        }
-
-        .status-dot.offline {
-            background-color: #dc3545;
-            box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
-        }
-
-        .heartbeat-placeholder {
-            text-align: center;
-            padding: 20px;
-            color: #999;
-            font-size: 9pt;
-            font-style: italic;
-        }
-
         /* Test Print Section */
         .test-print-section {
             background: white;
@@ -517,6 +420,30 @@
             border: 1px solid #bee5eb;
             color: #0c5460;
             display: block;
+        }
+
+        /* Status Dot (used in System Monitor) */
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .status-dot.online {
+            background-color: #28a745;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+        }
+
+        .status-dot.waiting {
+            background-color: #ffc107;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+        }
+
+        .status-dot.offline {
+            background-color: #dc3545;
+            box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
         }
 
         /* System Monitor Section */
@@ -662,33 +589,6 @@
                 <span class="heartbeat-value" id="heartbeatValue">(-)</span>
             </div>
         <div class="header-datetime" id="headerDateTime"></div>
-        </div>
-    </div>
-
-    <!-- PLC Heartbeat Monitor -->
-    <div class="heartbeat-monitor" id="heartbeatMonitor">
-        <div class="heartbeat-monitor-header">PLC Heartbeat Monitor</div>
-        <div class="heartbeat-placeholder" id="heartbeatPlaceholder">Waiting for data…</div>
-        <div class="heartbeat-monitor-content" id="heartbeatContent" style="display: none;">
-            <div class="heartbeat-field">
-                <div class="heartbeat-field-label">PLC IP Address</div>
-                <div class="heartbeat-field-value" id="heartbeatPlcIp">-</div>
-            </div>
-            <div class="heartbeat-field">
-                <div class="heartbeat-field-label">Raw Heartbeat Value</div>
-                <div class="heartbeat-field-value" id="heartbeatMonitorValue">-</div>
-            </div>
-            <div class="heartbeat-field">
-                <div class="heartbeat-field-label">PLC Status</div>
-                <div class="heartbeat-status-indicator">
-                    <span class="status-dot offline" id="heartbeatStatusDot"></span>
-                    <span class="heartbeat-field-value status-offline" id="heartbeatPlcStatus">-</span>
-                </div>
-            </div>
-            <div class="heartbeat-field">
-                <div class="heartbeat-field-label">Last Update Time</div>
-                <div class="heartbeat-field-value" id="heartbeatLastUpdate">-</div>
-            </div>
         </div>
     </div>
 
@@ -916,8 +816,7 @@
                 .build();
 
             heartbeatConnection.on("HeartbeatUpdate", function(data) {
-                updateHeartbeatMonitor(data);
-                // Also update header for backward compatibility
+                // Update header heartbeat display
                 updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
             });
 
@@ -932,12 +831,6 @@
                 });
 
             heartbeatConnection.onreconnecting(function() {
-                updateHeartbeatMonitor({
-                    heartbeatValue: -1,
-                    plcStatus: 'OFFLINE',
-                    plcIp: '-',
-                    lastUpdateTime: new Date().toISOString()
-                });
                 updateHeartbeatDisplay(-1, "RECONNECTING");
             });
 
@@ -952,78 +845,11 @@
             try {
                 const response = await fetch('/api/plc/heartbeat');
                 const data = await response.json();
-                updateHeartbeatMonitor(data);
-                // Also update header for backward compatibility
+                // Update header heartbeat display
                 updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
             } catch (error) {
                 console.error('Error fetching heartbeat status:', error);
-                updateHeartbeatMonitor({
-                    heartbeatValue: -1,
-                    plcStatus: 'OFFLINE',
-                    plcIp: '-',
-                    lastUpdateTime: new Date().toISOString()
-                });
                 updateHeartbeatDisplay(-1, "ERROR");
-            }
-        }
-
-        // Update PLC Heartbeat Monitor component
-        function updateHeartbeatMonitor(data) {
-            const placeholder = document.getElementById('heartbeatPlaceholder');
-            const content = document.getElementById('heartbeatContent');
-            const plcIpElement = document.getElementById('heartbeatPlcIp');
-            const valueElement = document.getElementById('heartbeatMonitorValue');
-            const statusElement = document.getElementById('heartbeatPlcStatus');
-            const statusDot = document.getElementById('heartbeatStatusDot');
-            const lastUpdateElement = document.getElementById('heartbeatLastUpdate');
-
-            // Hide placeholder and show content when data arrives
-            if (data && data.heartbeatValue !== undefined) {
-                placeholder.style.display = 'none';
-                content.style.display = 'grid';
-
-                // Update PLC IP
-                plcIpElement.textContent = data.plcIp || '-';
-
-                // Update heartbeat value
-                valueElement.textContent = data.heartbeatValue >= 0 ? data.heartbeatValue.toString() : '-';
-
-                // Update status with color coding
-                const status = data.plcStatus || 'OFFLINE';
-                statusElement.textContent = status;
-
-                // Remove all status classes
-                statusDot.className = 'status-dot';
-                statusElement.className = 'heartbeat-field-value';
-
-                // Apply status-specific styling
-                switch(status) {
-                    case 'ONLINE':
-                        statusDot.classList.add('online');
-                        statusElement.classList.add('status-online');
-                        break;
-                    case 'WAITING':
-                        statusDot.classList.add('waiting');
-                        statusElement.classList.add('status-waiting');
-                        break;
-                    case 'OFFLINE':
-                    default:
-                        statusDot.classList.add('offline');
-                        statusElement.classList.add('status-offline');
-                        break;
-                }
-
-                // Update last update time
-                if (data.lastUpdateTime) {
-                    const updateTime = new Date(data.lastUpdateTime);
-                    lastUpdateElement.textContent = formatDateTime(updateTime);
-                } else {
-                    lastUpdateElement.textContent = '-';
-                }
-            } else {
-                // No data yet, show placeholder
-                placeholder.style.display = 'block';
-                content.style.display = 'none';
             }
         }
 
