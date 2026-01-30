@@ -225,6 +225,37 @@ namespace NDTBundlePOC.Core.Services
             }
         }
 
+        public bool IsBundleAtPackingStation(int millId)
+        {
+            try
+            {
+                if (!IsConnected)
+                {
+                    return false;
+                }
+
+                // TODO: Uncomment when S7netplus is installed
+                // Read _Pack[0].PkIn and _Pack[0].SectIn from PLC
+                // Check if PkIn == SectIn (bundle is at packing station)
+                // Example: DB250.DBX3.4 for PkIn, DB250.DBX3.5 for SectIn
+                // var pkIn = _plc.Read($"DB250.DBX3.4");
+                // var sectIn = _plc.Read($"DB250.DBX3.5");
+                // if (pkIn != null && sectIn != null && pkIn is bool && sectIn is bool)
+                // {
+                //     return (bool)pkIn && (bool)sectIn; // Both true means at packing station
+                // }
+
+                // For POC: Return simulated value (default to true for testing)
+                // In production, this should read actual PLC addresses
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error checking packing station status from PLC: {ex.Message}");
+                return false;
+            }
+        }
+
         /// <summary>
         /// Read heartbeat value from PLC (DB1.DBW6 - L1_Heart_Beat)
         /// Returns: Continuous counter from 1 to 127, then resets to 1
