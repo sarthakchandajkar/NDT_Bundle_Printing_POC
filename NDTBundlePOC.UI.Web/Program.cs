@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NDTBundlePOC.Core.Models;
 using NDTBundlePOC.Core.Services;
 using NDTBundlePOC.UI.Web.Hubs;
 using NDTBundlePOC.UI.Web.Services;
@@ -29,6 +30,12 @@ using NDTBundlePOC.UI.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure JSON serialization to preserve property names
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = null; // Preserve original property names
+});
+
 // ============================================
 // HARDCODED CONFIGURATION VALUES
 // ============================================
@@ -45,32 +52,58 @@ var printerPort = 9100;                 // Standard port for raw printing (ZPL)
 var useNetwork = true;                  // true = Ethernet, false = Serial
 
 // Service Configuration
-var enablePLCPolling = true;            // Enable automatic PLC polling for NDT cuts
+var enablePLCPolling = false;           // Enable automatic PLC polling for NDT cuts (OFF by default - must be started via button)
 var pollingIntervalMs = 1000;          // Poll PLC every 1 second
 var millId = 1;                        // Mill ID (1 = Mill 1)
 var heartbeatPollingIntervalMs = 750;  // Heartbeat check every 750ms
 var enableHeartbeatMonitoring = true;   // Enable heartbeat monitoring
 
+// Printing Configuration
+var useTestMode = true;                 // Set to true to log tags instead of printing (for testing)
+                                        // Set to false to enable actual physical printing
+
 // Export/Output Path
 var exportPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NDT_Bundle_Exports");
 
 // Add services
-builder.Services.AddSingleton<IDataRepository, InMemoryDataRepository>();
-builder.Services.AddSingleton<INDTBundleService, NDTBundleService>();
-builder.Services.AddSingleton<IOKBundleService, OKBundleService>();
+builder.Services.AddSingleton<IDataRepository, SupabaseDataRepository>();
 
-// Use RealS7PLCService for physical PLC connection
-// Hardcoded values: IP=192.168.0.74, Rack=0, Slot=1
+// Register PLC service first (needed by bundle services)
 builder.Services.AddSingleton<IPLCService>(sp => new RealS7PLCService());
 
-// Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands directly to printer)
-// Hardcoded values: IP=192.168.0.125, Port=9100, Network=true
-builder.Services.AddSingleton<IPrinterService>(sp => 
-    new HoneywellPD45SPrinterService(
-        printerAddress: printerAddress,  // Hardcoded: 192.168.0.125
-        printerPort: printerPort,        // Hardcoded: 9100
-        useNetwork: useNetwork           // Hardcoded: true (Ethernet)
-    ));
+// Register bundle services with PLC service dependency
+builder.Services.AddSingleton<INDTBundleService>(sp => 
+    new NDTBundleService(sp.GetRequiredService<IDataRepository>(), sp.GetRequiredService<IPLCService>()));
+builder.Services.AddSingleton<IOKBundleService>(sp => 
+    new OKBundleService(sp.GetRequiredService<IDataRepository>(), sp.GetRequiredService<IPLCService>()));
+
+// PLC service is registered above with bundle services
+
+// Printer Service Configuration
+// TEST MODE: Use LoggingPrinterService to log tags instead of printing (for testing/verification)
+// PRODUCTION MODE: Use HoneywellPD45SPrinterService for actual physical printing
+if (useTestMode)
+{
+    // Test Mode: Log all print attempts to file (no physical printing)
+    builder.Services.AddSingleton<IPrinterService>(sp => 
+        new LoggingPrinterService());
+    Console.WriteLine("⚠ TEST MODE ENABLED: Tags will be logged to file instead of printing");
+    Console.WriteLine($"  → Log file location: {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NDT_Bundle_POC_PrintLogs")}");
+}
+else
+{
+    // Production Mode: Use actual printer
+    // Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands directly to printer)
+    // Hardcoded values: IP=192.168.0.125, Port=9100, Network=true
+    builder.Services.AddSingleton<IPrinterService>(sp => 
+        new HoneywellPD45SPrinterService(
+            printerAddress: printerAddress,  // Hardcoded: 192.168.0.125
+            printerPort: printerPort,        // Hardcoded: 9100
+            useNetwork: useNetwork           // Hardcoded: true (Ethernet)
+        ));
+    Console.WriteLine("✓ PRODUCTION MODE: Physical printing enabled");
+    Console.WriteLine($"  → Printer: {printerAddress}:{printerPort}");
+}
 
 // Alternative: Use Telerik Reporting for printing (generates images - use for Windows printers or if you have Telerik Reporting installed)
 // builder.Services.AddSingleton<IPrinterService>(sp => 
@@ -108,7 +141,33 @@ if (enableHeartbeatMonitoring)
     });
 }
 
-// Add PLC Polling Service as background service (if enabled)
+// Register Controllable PLC Polling Service (can be started/stopped via API)
+// Note: This is NOT registered as a hosted service - it must be started manually via button
+builder.Services.AddSingleton<IControllablePLCPollingService>(sp =>
+{
+    var plcService = sp.GetRequiredService<IPLCService>();
+    var ndtBundleService = sp.GetRequiredService<INDTBundleService>();
+    var okBundleService = sp.GetRequiredService<IOKBundleService>();
+    var printerService = sp.GetRequiredService<IPrinterService>();
+    var excelService = sp.GetRequiredService<ExcelExportService>();
+    var activityService = sp.GetRequiredService<IPipeCountingActivityService>();
+    var logger = sp.GetRequiredService<ILogger<ControllablePLCPollingService>>();
+    
+    return new ControllablePLCPollingService(
+        plcService,
+        ndtBundleService,
+        okBundleService,
+        printerService,
+        excelService,
+        logger,
+        activityService,
+        millId,
+        pollingIntervalMs
+    );
+});
+
+// Legacy: Only register PLCPollingService as hosted service if enablePLCPolling is true (for backward compatibility)
+// This should remain false by default - use ControllablePLCPollingService instead
 if (enablePLCPolling)
 {
     builder.Services.AddHostedService<PLCPollingService>(sp =>
@@ -137,9 +196,7 @@ if (enablePLCPolling)
 
 var app = builder.Build();
 
-// Initialize dummy data
-var repository = app.Services.GetRequiredService<IDataRepository>();
-((InMemoryDataRepository)repository).InitializeDummyData();
+// Note: SupabaseDataRepository connects directly to the database, no dummy data initialization needed
 
 // Auto-connect to PLC if configured (for polling or heartbeat monitoring)
 var plcService = app.Services.GetRequiredService<IPLCService>();
@@ -154,6 +211,7 @@ if ((enablePLCPolling || enableHeartbeatMonitoring) && !string.IsNullOrEmpty(plc
     Console.WriteLine($"Printer IP:       {printerAddress}");
     Console.WriteLine($"Printer Port:     {printerPort}");
     Console.WriteLine($"Printer Mode:     {(useNetwork ? "Network (Ethernet)" : "Serial")}");
+    Console.WriteLine($"Printing Mode:    {(useTestMode ? "TEST MODE (Logging Only)" : "PRODUCTION (Physical Printing)")}");
     Console.WriteLine($"Mill ID:          {millId}");
     Console.WriteLine($"PLC Polling:      {(enablePLCPolling ? "ENABLED" : "DISABLED")}");
     Console.WriteLine($"Heartbeat Monitor: {(enableHeartbeatMonitoring ? "ENABLED" : "DISABLED")}");
@@ -470,6 +528,146 @@ app.MapGet("/api/pipe-counting-activity", (IPipeCountingActivityServiceExtended 
                 ndtCuts = ndtCuts
             }
         });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// PO Plan Management API endpoints
+app.MapGet("/api/po-plans", (IDataRepository repository) =>
+{
+    try
+    {
+        var poPlans = repository.GetPOPlans();
+        return Results.Ok(poPlans);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapGet("/api/po-plans/{id}", (IDataRepository repository, int id) =>
+{
+    try
+    {
+        var poPlan = repository.GetPOPlan(id);
+        if (poPlan == null)
+            return Results.NotFound(new { success = false, message = "PO Plan not found" });
+        return Results.Ok(poPlan);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapPost("/api/po-plans", (IDataRepository repository, POPlan poPlan) =>
+{
+    try
+    {
+        repository.AddPOPlan(poPlan);
+        return Results.Ok(new { success = true, message = "PO Plan added successfully", data = poPlan });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapPut("/api/po-plans/{id}", (IDataRepository repository, int id, POPlan poPlan) =>
+{
+    try
+    {
+        if (poPlan.PO_Plan_ID != id)
+            return Results.BadRequest(new { success = false, message = "ID mismatch" });
+        
+        repository.UpdatePOPlan(poPlan);
+        return Results.Ok(new { success = true, message = "PO Plan updated successfully", data = poPlan });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapDelete("/api/po-plans/{id}", (IDataRepository repository, int id) =>
+{
+    try
+    {
+        repository.DeletePOPlan(id);
+        return Results.Ok(new { success = true, message = "PO Plan deleted successfully" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// PLC Polling Control API endpoints
+app.MapGet("/api/plc/polling/status", (IControllablePLCPollingService pollingService) =>
+{
+    try
+    {
+        bool isPolling = pollingService.IsPolling;
+        return Results.Ok(new { isPolling = isPolling });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapPost("/api/plc/polling/start", async (IControllablePLCPollingService pollingService, IPLCService plcService) =>
+{
+    try
+    {
+        if (pollingService.IsPolling)
+        {
+            return Results.Ok(new { success = true, message = "PLC polling is already running", isPolling = true });
+        }
+
+        if (!plcService.IsConnected)
+        {
+            return Results.BadRequest(new { success = false, message = "Cannot start polling: PLC is not connected. Please connect to PLC first." });
+        }
+
+        bool started = await pollingService.StartAsync();
+        if (started)
+        {
+            return Results.Ok(new { success = true, message = "PLC polling started successfully", isPolling = true });
+        }
+        else
+        {
+            return Results.BadRequest(new { success = false, message = "Failed to start PLC polling" });
+        }
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapPost("/api/plc/polling/stop", async (IControllablePLCPollingService pollingService) =>
+{
+    try
+    {
+        if (!pollingService.IsPolling)
+        {
+            return Results.Ok(new { success = true, message = "PLC polling is not running", isPolling = false });
+        }
+
+        bool stopped = await pollingService.StopAsync();
+        if (stopped)
+        {
+            return Results.Ok(new { success = true, message = "PLC polling stopped successfully", isPolling = false });
+        }
+        else
+        {
+            return Results.BadRequest(new { success = false, message = "Failed to stop PLC polling" });
+        }
     }
     catch (Exception ex)
     {

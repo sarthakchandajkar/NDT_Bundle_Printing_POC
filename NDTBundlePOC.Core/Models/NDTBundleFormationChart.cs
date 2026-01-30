@@ -4,7 +4,7 @@ namespace NDTBundlePOC.Core.Models
     {
         public int NDTBundleFormationChart_ID { get; set; }
         public int Mill_ID { get; set; }
-        public int? PO_Plan_ID { get; set; } // NULL = default for all POs
+        public decimal? Pipe_Size { get; set; } // NULL = default for all sizes
         public int NDT_PcsPerBundle { get; set; }
         public bool IsActive { get; set; }
     }

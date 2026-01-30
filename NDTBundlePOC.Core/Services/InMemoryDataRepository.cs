@@ -16,22 +16,33 @@ namespace NDTBundlePOC.Core.Services
 
         public void InitializeDummyData()
         {
-            // Initialize Formation Chart
+            // Initialize Formation Chart with size-based configuration
+            // Default configuration (Pipe_Size = null)
             _formationCharts.Add(new NDTBundleFormationChart
             {
                 NDTBundleFormationChart_ID = 1,
                 Mill_ID = 1,
-                PO_Plan_ID = null, // Default for all POs
-                NDT_PcsPerBundle = 5, // Reduced from 10 to 5 for more frequent bundle printing
+                Pipe_Size = null, // Default for all sizes
+                NDT_PcsPerBundle = 20,
+                IsActive = true
+            });
+
+            // Size-specific configurations
+            _formationCharts.Add(new NDTBundleFormationChart
+            {
+                NDTBundleFormationChart_ID = 2,
+                Mill_ID = 1,
+                Pipe_Size = 2.0m,
+                NDT_PcsPerBundle = 80,
                 IsActive = true
             });
 
             _formationCharts.Add(new NDTBundleFormationChart
             {
-                NDTBundleFormationChart_ID = 2,
+                NDTBundleFormationChart_ID = 3,
                 Mill_ID = 1,
-                PO_Plan_ID = 1, // Specific PO
-                NDT_PcsPerBundle = 5, // Reduced from 15 to 5 for more frequent bundle printing
+                Pipe_Size = 3.0m,
+                NDT_PcsPerBundle = 45,
                 IsActive = true
             });
 
@@ -103,17 +114,20 @@ namespace NDTBundlePOC.Core.Services
             }
         }
         
-        public NDTBundleFormationChart GetNDTFormationChart(int millId, int? poPlanId)
+        public NDTBundleFormationChart GetNDTFormationChart(int millId, decimal? pipeSize)
         {
-            // First try to get PO-specific chart
-            var poSpecific = _formationCharts
-                .FirstOrDefault(f => f.Mill_ID == millId && f.PO_Plan_ID == poPlanId && f.IsActive);
+            // First try to get size-specific chart
+            if (pipeSize.HasValue)
+            {
+                var sizeSpecific = _formationCharts
+                    .FirstOrDefault(f => f.Mill_ID == millId && f.Pipe_Size == pipeSize.Value && f.IsActive);
+                
+                if (sizeSpecific != null) return sizeSpecific;
+            }
             
-            if (poSpecific != null) return poSpecific;
-            
-            // Fall back to default (PO_Plan_ID = null)
+            // Fall back to default (Pipe_Size = null)
             return _formationCharts
-                .FirstOrDefault(f => f.Mill_ID == millId && f.PO_Plan_ID == null && f.IsActive);
+                .FirstOrDefault(f => f.Mill_ID == millId && f.Pipe_Size == null && f.IsActive);
         }
         
         public POPlan GetPOPlan(int poPlanId) =>

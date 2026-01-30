@@ -53,16 +53,17 @@ namespace NDTBundlePOC.Core.Services
     public class OKBundleService : IOKBundleService
     {
         private readonly IDataRepository _repository;
-        private const int DEFAULT_OK_PCS_PER_BUNDLE = 5; // Default OK pieces per bundle (reduced from 10 for more frequent bundle printing)
+        private readonly IPLCService _plcService;
         
         // In-memory storage for OK bundles (similar to NDT bundles)
         private List<OKBundle> _okBundles = new List<OKBundle>();
         private int _nextOKBundleId = 1;
         private readonly object _lock = new object();
 
-        public OKBundleService(IDataRepository repository)
+        public OKBundleService(IDataRepository repository, IPLCService plcService = null)
         {
             _repository = repository;
+            _plcService = plcService;
         }
 
         public void ProcessOKCuts(int millId, int newOKCuts)
@@ -76,8 +77,8 @@ namespace NDTBundlePOC.Core.Services
             var poPlan = _repository.GetPOPlan(activeSlit.PO_Plan_ID);
             if (poPlan == null) return;
 
-            // For OK bundles, use a default pieces per bundle (can be configured)
-            int requiredOKPcs = DEFAULT_OK_PCS_PER_BUNDLE;
+            // For OK bundles, use PcsPerBundle from PO_Plan table
+            int requiredOKPcs = poPlan.PcsPerBundle;
 
             int remainingCuts = newOKCuts;
 
@@ -98,28 +99,33 @@ namespace NDTBundlePOC.Core.Services
                     UpdateOKBundle(currentBundle);
 
                     // Check if bundle is complete
-                    if (currentBundle.OK_Pcs >= requiredOKPcs)
+                    // Scenario 1: Count >= PcsPerBundle (full bundle)
+                    // Scenario 2: PO end (partial bundle) - check ButtEnd signal
+                    bool isPOEnded = _plcService != null && _plcService.IsPOEnded(millId);
+                    bool isBundleComplete = currentBundle.OK_Pcs >= requiredOKPcs || isPOEnded;
+                    
+                    if (isBundleComplete)
                     {
                         // Bundle is complete - mark as completed and ready for printing
                         currentBundle.Status = 2; // Completed
                         currentBundle.BundleEndTime = DateTime.Now;
-                        currentBundle.IsFullBundle = true;
+                        currentBundle.IsFullBundle = currentBundle.OK_Pcs >= requiredOKPcs; // Full bundle only if count >= PcsPerBundle
                         UpdateOKBundle(currentBundle);
 
-                        // Create new bundle for remaining cuts (if any)
-                        if (remainingCuts > 0)
+                        // Create new bundle for remaining cuts (if any) - but only if PO hasn't ended
+                        if (remainingCuts > 0 && !isPOEnded)
                         {
                             string newBatchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
                             string newBundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
                             Console.WriteLine($"✓ Created new OK bundle {newBundleNo} for remaining {remainingCuts} cuts");
                         }
                         
-                        Console.WriteLine($"✓ OK Bundle {currentBundle.Bundle_No} completed with {currentBundle.OK_Pcs} pipes. Ready for printing.");
+                        string bundleType = currentBundle.IsFullBundle ? "full" : "partial (PO ended)";
+                        Console.WriteLine($"✓ OK Bundle {currentBundle.Bundle_No} completed ({bundleType}) with {currentBundle.OK_Pcs} pipes. Ready for printing.");
                     }
                     else
                     {
                         // Bundle not complete yet - continue processing
-                        // Note: Status field no longer exists in PO_Plan table
                         // No more cuts to process
                         break;
                     }
@@ -140,15 +146,19 @@ namespace NDTBundlePOC.Core.Services
                         remainingCuts -= cutsForNewBundle;
                         UpdateOKBundle(newBundle);
                         
-                        // If bundle is complete immediately, mark it
-                        if (newBundle.OK_Pcs >= requiredOKPcs)
+                        // Check if bundle is complete immediately
+                        bool isPOEnded = _plcService != null && _plcService.IsPOEnded(millId);
+                        bool isBundleComplete = newBundle.OK_Pcs >= requiredOKPcs || isPOEnded;
+                        
+                        if (isBundleComplete)
                         {
                             newBundle.Status = 2; // Completed
                             newBundle.BundleEndTime = DateTime.Now;
-                            newBundle.IsFullBundle = true;
+                            newBundle.IsFullBundle = newBundle.OK_Pcs >= requiredOKPcs;
                             UpdateOKBundle(newBundle);
                             
-                            Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed with {newBundle.OK_Pcs} pipes. Ready for printing.");
+                            string bundleType = newBundle.IsFullBundle ? "full" : "partial (PO ended)";
+                            Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed ({bundleType}) with {newBundle.OK_Pcs} pipes. Ready for printing.");
                         }
                     }
                     else

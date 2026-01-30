@@ -273,22 +273,100 @@ namespace NDTBundlePOC.Core.Services
                     return false;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read PO end flag from PLC (adjust address based on your PLC configuration)
-                var value = _plc.Read("DB250.DBX5.7"); // Example address
-                if (value != null && value is bool)
+                // Read ButtEnd signal from DB250.DBX2.2 (L1L2_ButtEnd) - indicates PO end
+                lock (_lockObject)
                 {
-                    return (bool)value;
-                }
-                */
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return false;
+                    }
 
-                // For POC: Return simulated value
+                    var value = _plc.Read("DB250.DBX2.2");
+                    if (value != null && value is bool)
+                    {
+                        return (bool)value;
+                    }
+                }
+
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Error reading PO End flag from PLC: {ex.Message}");
+                // Check if error is due to address out of range
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
+                {
+                    return false;
+                }
+                
+                Console.WriteLine($"✗ Error reading PO End (ButtEnd) from PLC: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Check if bundle is at packing station (PkIn == SectIn)
+        /// Reads from _Pack[0].PkIn and _Pack[0].SectIn in PLC
+        /// Note: This is a placeholder - actual PLC addresses need to be determined based on your PLC structure
+        /// </summary>
+        public bool IsBundleAtPackingStation(int millId)
+        {
+            try
+            {
+                if (!IsConnected)
+                {
+                    return false;
+                }
+
+                // TODO: Update these addresses based on your actual PLC structure
+                // The addresses _Pack[0].PkIn and _Pack[0].SectIn need to be mapped to actual DB addresses
+                // For now, this is a placeholder that reads from example addresses
+                // You may need to read from a UDT (User Defined Type) or specific DB addresses
+                
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return false;
+                    }
+
+                    // Example: Read from DB addresses (adjust based on your PLC structure)
+                    // This is a placeholder - you need to determine the actual addresses
+                    // var pkIn = _plc.Read("DBXXX.DBWXX"); // _Pack[0].PkIn
+                    // var sectIn = _plc.Read("DBXXX.DBWXX"); // _Pack[0].SectIn
+                    // 
+                    // if (pkIn != null && sectIn != null)
+                    // {
+                    //     int pkInValue = Convert.ToInt32(pkIn);
+                    //     int sectInValue = Convert.ToInt32(sectIn);
+                    //     return pkInValue == sectInValue;
+                    // }
+
+                    // For now, return true to allow printing (you should implement actual logic)
+                    // In production, this should check the actual PLC addresses
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silently return false if address is out of range
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found") ||
+                    errorMsg.Contains("out of range") ||
+                    errorMsg.Contains("address out of range"))
+                {
+                    // If addresses are not configured, assume bundle is at packing station
+                    // This allows printing to proceed even if packing station check is not implemented
+                    return true;
+                }
+                
+                Console.WriteLine($"✗ Error reading packing station status from PLC: {ex.Message}");
                 return false;
             }
         }

@@ -25,8 +25,11 @@ namespace NDTBundlePOC.Core.Services
         // Read Slit ID from PLC
         int ReadSlitID(int millId);
         
-        // Check if PO has ended
+        // Check if PO has ended (ButtEnd signal)
         bool IsPOEnded(int millId);
+        
+        // Check if bundle is at packing station (PkIn == SectIn)
+        bool IsBundleAtPackingStation(int millId);
         
         // Read heartbeat value from PLC (DB1.DBW6)
         int ReadHeartbeat();

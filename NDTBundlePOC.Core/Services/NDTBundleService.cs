@@ -8,10 +8,15 @@ namespace NDTBundlePOC.Core.Services
     public class NDTBundleService : INDTBundleService
     {
         private readonly IDataRepository _repository;
+        private readonly IPLCService _plcService;
+        
+        // Track current PO_Plan_ID to detect PO changes
+        private int? _currentPOPlanId = null;
 
-        public NDTBundleService(IDataRepository repository)
+        public NDTBundleService(IDataRepository repository, IPLCService plcService = null)
         {
             _repository = repository;
+            _plcService = plcService;
         }
 
         public void ProcessNDTCuts(int millId, int newNDTCuts)
@@ -25,10 +30,38 @@ namespace NDTBundlePOC.Core.Services
             var poPlan = _repository.GetPOPlan(activeSlit.PO_Plan_ID);
             if (poPlan == null) return;
 
-            // Get NDT Pcs per bundle from chart
-            // Bundle size reduced to 5 pipes per bundle for more frequent bundle printing
-            var formationChart = _repository.GetNDTFormationChart(millId, poPlan.PO_Plan_ID);
-            int requiredNDTPcs = formationChart?.NDT_PcsPerBundle ?? 5; // Default to 5 pipes per bundle
+            // Get NDT Pcs per bundle from chart based on Pipe_Size
+            // Parse Pipe_Size from PO_Plan (e.g., "2.5", "3.0", etc.)
+            decimal? pipeSize = null;
+            if (!string.IsNullOrEmpty(poPlan.Pipe_Size) && decimal.TryParse(poPlan.Pipe_Size, out decimal parsedSize))
+            {
+                pipeSize = parsedSize;
+            }
+            
+            var formationChart = _repository.GetNDTFormationChart(millId, pipeSize);
+            int requiredNDTPcs = formationChart?.NDT_PcsPerBundle ?? 20; // Default to 20 pipes per bundle
+
+            // Check if PO has changed (Scenario 2: PO end/PO ID end)
+            bool isPOChanged = _currentPOPlanId.HasValue && _currentPOPlanId.Value != poPlan.PO_Plan_ID;
+            bool isPOEnded = _plcService != null && _plcService.IsPOEnded(millId);
+            
+            // If PO changed or ended, close current batch and start new one
+            if (isPOChanged || isPOEnded)
+            {
+                var activeBundle = _repository.GetActiveNDTBundle(_currentPOPlanId ?? poPlan.PO_Plan_ID);
+                if (activeBundle != null && activeBundle.Status == 1)
+                {
+                    // Close partial bundle due to PO end/change
+                    activeBundle.Status = 2; // Completed
+                    activeBundle.BundleEndTime = DateTime.Now;
+                    activeBundle.IsFullBundle = false; // Partial bundle
+                    _repository.UpdateNDTBundle(activeBundle);
+                    Console.WriteLine($"✓ NDT Bundle {activeBundle.Bundle_No} closed (partial) due to PO end/change. Ready for printing.");
+                }
+            }
+            
+            // Update current PO tracking
+            _currentPOPlanId = poPlan.PO_Plan_ID;
 
             int remainingCuts = newNDTCuts;
 
@@ -38,54 +71,134 @@ namespace NDTBundlePOC.Core.Services
                 // Get current active bundle
                 var currentBundle = _repository.GetActiveNDTBundle(poPlan.PO_Plan_ID);
                 
-                if (currentBundle != null)
-            {
-                // Calculate how many cuts go to current bundle
-                    int cutsForCurrentBundle = Math.Min(remainingCuts, requiredNDTPcs - currentBundle.NDT_Pcs);
+                // Calculate sum of NDT Pcs for current batch (all bundles with same Batch_No)
+                int currentBatchSum = 0;
+                if (currentBundle != null && !string.IsNullOrEmpty(currentBundle.Batch_No))
+                {
+                    currentBatchSum = _repository.GetNDTBundles()
+                        .Where(b => b.Batch_No == currentBundle.Batch_No && b.Status != 3)
+                        .Sum(b => b.NDT_Pcs);
+                }
                 
-                // Update existing bundle
+                if (currentBundle != null)
+                {
+                    // Calculate how many cuts go to current bundle
+                    int cutsForCurrentBundle = Math.Min(remainingCuts, requiredNDTPcs - currentBundle.NDT_Pcs);
+                    
+                    // Update existing bundle
                     currentBundle.NDT_Pcs += cutsForCurrentBundle;
-                remainingCuts -= cutsForCurrentBundle;
+                    remainingCuts -= cutsForCurrentBundle;
                     _repository.UpdateNDTBundle(currentBundle);
+                    
+                    // Recalculate batch sum after update
+                    if (!string.IsNullOrEmpty(currentBundle.Batch_No))
+                    {
+                        currentBatchSum = _repository.GetNDTBundles()
+                            .Where(b => b.Batch_No == currentBundle.Batch_No && b.Status != 3)
+                            .Sum(b => b.NDT_Pcs);
+                    }
 
                     // Check if bundle is complete
-                    if (currentBundle.NDT_Pcs >= requiredNDTPcs)
-                {
+                    // Scenario 1: Bundle reaches required PcsPerBundle
+                    bool isBundleComplete = currentBundle.NDT_Pcs >= requiredNDTPcs;
+                    
+                    // Scenario 1: If sum of NDT Pcs of the Mill >= required Pcs, end batch and create new batch in series
+                    bool shouldEndBatch = currentBatchSum >= requiredNDTPcs;
+                    
+                    // Scenario 2: If PO ends and sum < required Pcs, end batch by PO end
+                    bool shouldEndBatchByPO = isPOEnded && currentBatchSum < requiredNDTPcs;
+                    
+                    if (isBundleComplete)
+                    {
                         // Bundle is complete - mark as completed and ready for printing
                         currentBundle.Status = 2; // Completed
                         currentBundle.BundleEndTime = DateTime.Now;
                         currentBundle.IsFullBundle = true;
                         _repository.UpdateNDTBundle(currentBundle);
-
-                        // Create new bundle for remaining cuts (if any)
-                        if (remainingCuts > 0)
+                        
+                        // Scenario 1: If batch sum >= required Pcs, end batch and create new batch in series
+                        if (shouldEndBatch && remainingCuts > 0)
                         {
                             string newBatchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
                             string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
-                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} for remaining {remainingCuts} cuts");
+                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} with new batch {newBatchNo} (batch sum {currentBatchSum} >= {requiredNDTPcs})");
+                        }
+                        // Create new bundle in same batch if batch not complete yet
+                        else if (!shouldEndBatch && remainingCuts > 0)
+                        {
+                            string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, currentBundle.Batch_No);
+                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} in same batch {currentBundle.Batch_No} for remaining {remainingCuts} cuts");
                         }
                         
                         Console.WriteLine($"✓ NDT Bundle {currentBundle.Bundle_No} completed with {currentBundle.NDT_Pcs} pipes. Ready for printing.");
+                    }
+                    else if (shouldEndBatchByPO)
+                    {
+                        // Scenario 2: PO ended and sum < required Pcs - end batch by PO end
+                        currentBundle.Status = 2; // Completed
+                        currentBundle.BundleEndTime = DateTime.Now;
+                        currentBundle.IsFullBundle = false; // Partial bundle
+                        _repository.UpdateNDTBundle(currentBundle);
+                        Console.WriteLine($"✓ NDT Bundle {currentBundle.Bundle_No} closed (partial, PO ended) with {currentBundle.NDT_Pcs} pipes. Batch sum: {currentBatchSum} < {requiredNDTPcs}. Ready for printing.");
+                        
+                        // Next PO will get new batch number (handled at start of ProcessNDTCuts)
+                    }
+                    else
+                    {
+                        // Bundle not complete yet - continue processing
+                        break;
+                    }
                 }
                 else
                 {
-                        // Bundle not complete yet - continue processing
-                        // Note: Status field no longer exists in PO_Plan table
-                        // No more cuts to process
-                        break;
-                }
-            }
-            else
-            {
-                // No active bundle, create new one
-                string batchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, "");
+                    // No active bundle, create new one
+                    // Check if we need a new batch (PO changed or previous batch ended)
+                    string batchNo;
+                    if (isPOChanged || isPOEnded)
+                    {
+                        // Scenario 2: New PO gets new batch number
+                        batchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, "");
+                    }
+                    else
+                    {
+                        // Check if there's a previous batch for this PO
+                        var lastBundle = _repository.GetNDTBundles()
+                            .Where(b => b.PO_Plan_ID == poPlan.PO_Plan_ID)
+                            .OrderByDescending(b => b.BundleStartTime)
+                            .FirstOrDefault();
+                        
+                        if (lastBundle != null && !string.IsNullOrEmpty(lastBundle.Batch_No))
+                        {
+                            // Check if previous batch sum >= required Pcs
+                            int lastBatchSum = _repository.GetNDTBundles()
+                                .Where(b => b.Batch_No == lastBundle.Batch_No && b.Status != 3)
+                                .Sum(b => b.NDT_Pcs);
+                            
+                            if (lastBatchSum >= requiredNDTPcs)
+                            {
+                                // Scenario 1: Previous batch completed, create new batch in series
+                                batchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, lastBundle.Batch_No);
+                            }
+                            else
+                            {
+                                // Continue with same batch
+                                batchNo = lastBundle.Batch_No;
+                            }
+                        }
+                        else
+                        {
+                            // First bundle for this PO
+                            batchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, "");
+                        }
+                    }
+                    
                     string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, batchNo);
 
                     // Get the newly created bundle and add cuts to it
-                var newBundle = _repository.GetNDTBundles()
+                    var newBundle = _repository.GetNDTBundles()
                         .FirstOrDefault(b => b.Bundle_No == newBundleNo);
-                if (newBundle != null)
-                {
+                    if (newBundle != null)
+                    {
                         int cutsForNewBundle = Math.Min(remainingCuts, requiredNDTPcs);
                         newBundle.NDT_Pcs = cutsForNewBundle;
                         remainingCuts -= cutsForNewBundle;
@@ -97,7 +210,7 @@ namespace NDTBundlePOC.Core.Services
                             newBundle.Status = 2; // Completed
                             newBundle.BundleEndTime = DateTime.Now;
                             newBundle.IsFullBundle = true;
-                    _repository.UpdateNDTBundle(newBundle);
+                            _repository.UpdateNDTBundle(newBundle);
                             
                             Console.WriteLine($"✓ NDT Bundle {newBundle.Bundle_No} completed with {newBundle.NDT_Pcs} pipes. Ready for printing.");
                         }

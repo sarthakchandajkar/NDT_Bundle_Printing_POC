@@ -73,6 +73,49 @@ namespace NDTBundlePOC.UI
             LoadBundles();
             StartDateTimeTimer();
             InitializePLCPolling();
+            
+            // Position buttons correctly after form is loaded
+            this.Load += MainForm_Load;
+            _filterPanel.Resize += FilterPanel_Resize;
+        }
+
+        private void MainForm_Load(object? sender, EventArgs e)
+        {
+            PositionActionButtons();
+        }
+
+        private void FilterPanel_Resize(object? sender, EventArgs e)
+        {
+            PositionActionButtons();
+        }
+
+        private void PositionActionButtons()
+        {
+            if (_btnPrintBundles == null || _btnViewLog == null || _btnStartStopPolling == null || _btnManagePOPlans == null)
+                return;
+
+            int buttonSpacing = 5;
+            int rightMargin = 10;
+            int yPos = 163; // Row 5 y position (5 + 35 + 30 + 30 + 30 + 30 - 2)
+            
+            // Calculate positions from right edge
+            int currentX = _filterPanel.Width - rightMargin;
+            
+            // Position from right to left
+            currentX -= _btnManagePOPlans.Width;
+            _btnManagePOPlans.Location = new Point(currentX, yPos);
+            currentX -= buttonSpacing;
+            
+            currentX -= _btnStartStopPolling.Width;
+            _btnStartStopPolling.Location = new Point(currentX, yPos);
+            currentX -= buttonSpacing;
+            
+            currentX -= _btnViewLog.Width;
+            _btnViewLog.Location = new Point(currentX, yPos);
+            currentX -= buttonSpacing;
+            
+            currentX -= _btnPrintBundles.Width;
+            _btnPrintBundles.Location = new Point(currentX, yPos);
         }
 
         private void InitializeComponent()
@@ -289,32 +332,38 @@ namespace NDTBundlePOC.UI
             yPos += 30;
 
             // Row 5: Action Buttons (Right-aligned)
-            // Position buttons from right to left
-            int buttonSpacing = 5;
-            int currentX = 0; // Start from right edge
-            
-            _btnManagePOPlans = new Button
+            // Buttons will be positioned correctly in PositionActionButtons() after form loads
+            _btnPrintBundles = new Button
             {
-                Text = "Manage PO Plans",
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(currentX, yPos - 2),
-                Width = 130,
+                Text = "Print Bundles",
+                Width = 120,
                 Height = 22,
                 Font = new Font("Segoe UI", 8F),
-                BackColor = Color.FromArgb(40, 167, 69),
+                BackColor = Color.FromArgb(0, 120, 215),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
-            _btnManagePOPlans.FlatAppearance.BorderSize = 0;
-            _btnManagePOPlans.Click += BtnManagePOPlans_Click;
-            _filterPanel.Controls.Add(_btnManagePOPlans);
-            currentX += _btnManagePOPlans.Width + buttonSpacing;
+            _btnPrintBundles.FlatAppearance.BorderSize = 0;
+            _btnPrintBundles.Click += BtnPrintBundles_Click;
+            _filterPanel.Controls.Add(_btnPrintBundles);
+
+            _btnViewLog = new Button
+            {
+                Text = "View Log",
+                Width = 90,
+                Height = 22,
+                Font = new Font("Segoe UI", 8F),
+                BackColor = Color.FromArgb(0, 120, 215),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            _btnViewLog.FlatAppearance.BorderSize = 0;
+            _btnViewLog.Click += (s, e) => MessageBox.Show("View Log functionality not implemented", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _filterPanel.Controls.Add(_btnViewLog);
 
             _btnStartStopPolling = new Button
             {
                 Text = "Start PLC Polling",
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(currentX, yPos - 2),
                 Width = 130,
                 Height = 22,
                 Font = new Font("Segoe UI", 8F),
@@ -326,40 +375,20 @@ namespace NDTBundlePOC.UI
             _btnStartStopPolling.FlatAppearance.BorderSize = 0;
             _btnStartStopPolling.Click += BtnStartStopPolling_Click;
             _filterPanel.Controls.Add(_btnStartStopPolling);
-            currentX += _btnStartStopPolling.Width + buttonSpacing;
 
-            _btnViewLog = new Button
+            _btnManagePOPlans = new Button
             {
-                Text = "View Log",
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(currentX, yPos - 2),
-                Width = 90,
+                Text = "Manage PO Plans",
+                Width = 130,
                 Height = 22,
                 Font = new Font("Segoe UI", 8F),
-                BackColor = Color.FromArgb(0, 120, 215),
+                BackColor = Color.FromArgb(40, 167, 69),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
-            _btnViewLog.FlatAppearance.BorderSize = 0;
-            _btnViewLog.Click += (s, e) => MessageBox.Show("View Log functionality not implemented", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            _filterPanel.Controls.Add(_btnViewLog);
-            currentX += _btnViewLog.Width + buttonSpacing;
-
-            _btnPrintBundles = new Button
-            {
-                Text = "Print Bundles",
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(currentX, yPos - 2),
-                Width = 120,
-                Height = 22,
-                Font = new Font("Segoe UI", 8F),
-                BackColor = Color.FromArgb(0, 120, 215),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            _btnPrintBundles.FlatAppearance.BorderSize = 0;
-            _btnPrintBundles.Click += BtnPrintBundles_Click;
-            _filterPanel.Controls.Add(_btnPrintBundles);
+            _btnManagePOPlans.FlatAppearance.BorderSize = 0;
+            _btnManagePOPlans.Click += BtnManagePOPlans_Click;
+            _filterPanel.Controls.Add(_btnManagePOPlans);
 
             // Search Box
             _txtSearch = new TextBox

@@ -12,8 +12,8 @@ namespace NDTBundlePOC.Core.Services
         void AddNDTBundle(NDTBundle bundle);
         void UpdateNDTBundle(NDTBundle bundle);
         
-        // Formation Chart
-        NDTBundleFormationChart GetNDTFormationChart(int millId, int? poPlanId);
+        // Formation Chart - Get by Size (for NDT bundles)
+        NDTBundleFormationChart GetNDTFormationChart(int millId, decimal? pipeSize);
         
         // PO Plans
         POPlan GetPOPlan(int poPlanId);

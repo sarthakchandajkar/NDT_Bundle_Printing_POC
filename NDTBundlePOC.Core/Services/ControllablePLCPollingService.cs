@@ -2,48 +2,68 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace NDTBundlePOC.Core.Services
 {
     /// <summary>
-    /// PLC Polling Service - Continuously reads from PLC and processes pipe cuts
-    /// This service runs in the background and automatically:
-    /// 1. Reads OK and NDT cuts from PLC
-    /// 2. Forms bundles automatically
-    /// 3. Triggers printing when bundles complete
+    /// Controllable PLC Polling Service - Allows starting/stopping polling dynamically
+    /// This service manages the polling loop and can be controlled via API
     /// </summary>
-    public class PLCPollingService : BackgroundService
+    public interface IControllablePLCPollingService
+    {
+        bool IsPolling { get; }
+        bool Start();
+        bool Stop();
+        Task<bool> StartAsync();
+        Task<bool> StopAsync();
+    }
+
+    public class ControllablePLCPollingService : IControllablePLCPollingService
     {
         private readonly IPLCService _plcService;
         private readonly INDTBundleService _ndtBundleService;
         private readonly IOKBundleService _okBundleService;
         private readonly IPrinterService _printerService;
         private readonly ExcelExportService _excelService;
-        private readonly ILogger<PLCPollingService> _logger;
+        private readonly ILogger<ControllablePLCPollingService> _logger;
         private readonly IPipeCountingActivityService _activityService;
-        
         private readonly int _millId;
         private readonly int _pollingIntervalMs;
+        
+        private CancellationTokenSource _cancellationTokenSource;
+        private Task _pollingTask;
+        private bool _isPolling = false;
+        private readonly object _lockObject = new object();
         
         // Track previous values to detect changes
         private int _previousOKCuts = 0;
         private int _previousNDTCuts = 0;
         private bool _previousOKBundleDone = false;
         private bool _previousNDTBundleDone = false;
-        private bool _isInitialized = false; // Track if service has completed first initialization
+        private bool _isInitialized = false;
 
-        public PLCPollingService(
+        public bool IsPolling 
+        { 
+            get 
+            { 
+                lock (_lockObject)
+                {
+                    return _isPolling && _pollingTask != null && !_pollingTask.IsCompleted;
+                }
+            } 
+        }
+
+        public ControllablePLCPollingService(
             IPLCService plcService,
             INDTBundleService ndtBundleService,
             IOKBundleService okBundleService,
             IPrinterService printerService,
             ExcelExportService excelService,
-            ILogger<PLCPollingService> logger,
+            ILogger<ControllablePLCPollingService> logger,
+            IPipeCountingActivityService activityService,
             int millId = 1,
-            int pollingIntervalMs = 1000,
-            IPipeCountingActivityService activityService = null) // Optional activity service
+            int pollingIntervalMs = 1000)
         {
             _plcService = plcService;
             _ndtBundleService = ndtBundleService;
@@ -56,11 +76,112 @@ namespace NDTBundlePOC.Core.Services
             _pollingIntervalMs = pollingIntervalMs;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        public bool Start()
         {
-            _logger?.LogInformation("PLC Polling Service started");
+            return StartAsync().GetAwaiter().GetResult();
+        }
 
-            while (!stoppingToken.IsCancellationRequested)
+        public bool Stop()
+        {
+            return StopAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<bool> StartAsync()
+        {
+            lock (_lockObject)
+            {
+                if (_isPolling)
+                {
+                    _logger?.LogWarning("PLC Polling is already running");
+                    return true;
+                }
+
+                if (!_plcService.IsConnected)
+                {
+                    _logger?.LogWarning("Cannot start PLC polling: PLC is not connected");
+                    return false;
+                }
+
+                _cancellationTokenSource = new CancellationTokenSource();
+                _isPolling = true;
+                _isInitialized = false; // Reset initialization flag when starting
+            }
+
+            try
+            {
+                // Start the polling loop in a background task
+                _pollingTask = Task.Run(async () => await PollingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+
+                _logger?.LogInformation("PLC Polling Service started successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to start PLC Polling Service");
+                lock (_lockObject)
+                {
+                    _isPolling = false;
+                    _pollingTask = null;
+                    _cancellationTokenSource?.Dispose();
+                    _cancellationTokenSource = null;
+                }
+                return false;
+            }
+        }
+
+        public async Task<bool> StopAsync()
+        {
+            lock (_lockObject)
+            {
+                if (!_isPolling)
+                {
+                    _logger?.LogWarning("PLC Polling is not running");
+                    return true;
+                }
+
+                _isPolling = false;
+            }
+
+            try
+            {
+                // Cancel the polling loop
+                _cancellationTokenSource?.Cancel();
+                
+                // Wait for the task to complete (with timeout)
+                if (_pollingTask != null)
+                {
+                    await Task.WhenAny(_pollingTask, Task.Delay(5000)); // 5 second timeout
+                    
+                    if (!_pollingTask.IsCompleted)
+                    {
+                        _logger?.LogWarning("PLC Polling Service did not stop within timeout");
+                    }
+                }
+
+                // Cleanup
+                _cancellationTokenSource?.Dispose();
+                
+                lock (_lockObject)
+                {
+                    _pollingTask = null;
+                    _cancellationTokenSource = null;
+                }
+
+                _logger?.LogInformation("PLC Polling Service stopped successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error stopping PLC Polling Service");
+                return false;
+            }
+        }
+
+        private async Task PollingLoop(CancellationToken cancellationToken)
+        {
+            _logger?.LogInformation("PLC Polling loop started");
+
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -69,14 +190,12 @@ namespace NDTBundlePOC.Core.Services
                         // Read OK cuts from PLC
                         int currentOKCuts = ReadOKCuts();
                         
-                        // Read NDT cuts from PLC (needed for activity service)
+                        // Read NDT cuts from PLC
                         int currentNDTCuts = _plcService.ReadNDTCuts(_millId);
                         
-                        // ALWAYS update activity service with current PLC values (ensures UI shows current values)
-                        // This is important when service restarts or values don't increase
+                        // Update activity service
                         if (_activityService != null)
                         {
-                            // Always update counts, but only log activity entry if there's an increase
                             if (currentOKCuts > _previousOKCuts)
                             {
                                 int newOKCuts = currentOKCuts - _previousOKCuts;
@@ -84,16 +203,13 @@ namespace NDTBundlePOC.Core.Services
                             }
                             else if (_previousOKCuts == 0 && currentOKCuts > 0)
                             {
-                                // Service just started - update with current values without processing as new cuts
                                 _activityService.LogActivity("OK", 0, currentOKCuts, currentNDTCuts, "PLC");
                             }
                             else if (currentOKCuts != _previousOKCuts)
                             {
-                                // Value changed (decreased or reset) - update counts silently
                                 _activityService.LogActivity("OK", 0, currentOKCuts, currentNDTCuts, "PLC");
                             }
                             
-                            // Also update NDT counts in the same call if OK didn't change
                             if (currentNDTCuts > _previousNDTCuts)
                             {
                                 _activityService.LogActivity("NDT", currentNDTCuts - _previousNDTCuts, currentOKCuts, currentNDTCuts, "PLC");
@@ -104,48 +220,41 @@ namespace NDTBundlePOC.Core.Services
                             }
                             else if (currentNDTCuts != _previousNDTCuts && currentOKCuts == _previousOKCuts)
                             {
-                                // NDT changed but OK didn't - update counts
                                 _activityService.LogActivity("NDT", 0, currentOKCuts, currentNDTCuts, "PLC");
                             }
                         }
                         
-                        // Process new OK cuts (only when there's an increase)
+                        // Process new OK cuts
                         if (currentOKCuts > _previousOKCuts)
                         {
                             int newOKCuts = currentOKCuts - _previousOKCuts;
                             _previousOKCuts = currentOKCuts;
                             
                             _logger?.LogInformation($"Detected {newOKCuts} new OK cuts");
-                            
                             _okBundleService.ProcessOKCuts(_millId, newOKCuts);
                         }
                         else if (_previousOKCuts == 0 && currentOKCuts > 0)
                         {
-                            // Service just started - initialize previous value to current to avoid processing all existing cuts
                             _previousOKCuts = currentOKCuts;
                             _logger?.LogInformation($"Initialized OK cuts tracking: {currentOKCuts} (service started)");
                         }
 
-                        // Process new NDT cuts (only when there's an increase)
+                        // Process new NDT cuts
                         if (currentNDTCuts > _previousNDTCuts)
                         {
                             int newNDTCuts = currentNDTCuts - _previousNDTCuts;
                             _previousNDTCuts = currentNDTCuts;
                             
                             _logger?.LogInformation($"Detected {newNDTCuts} new NDT cuts");
-                            
                             _ndtBundleService.ProcessNDTCuts(_millId, newNDTCuts);
                         }
                         else if (_previousNDTCuts == 0 && currentNDTCuts > 0)
                         {
-                            // Service just started - initialize previous value to current to avoid processing all existing cuts
                             _previousNDTCuts = currentNDTCuts;
                             _logger?.LogInformation($"Initialized NDT cuts tracking: {currentNDTCuts} (service started)");
                         }
 
-                        // ALWAYS check for completed bundles and print (not just when new cuts are detected)
-                        // This ensures bundles are printed even if PLC counter doesn't change
-                        // Skip printing on very first cycle to avoid printing any stale bundles from repository initialization
+                        // Check for completed bundles and print (skip first cycle)
                         if (_isInitialized)
                         {
                             CheckAndPrintOKBundles();
@@ -153,10 +262,8 @@ namespace NDTBundlePOC.Core.Services
                         }
                         else
                         {
-                            // Mark as initialized after first cycle completes
-                            // This prevents printing any bundles that might exist in repository on startup
                             _isInitialized = true;
-                            _logger?.LogInformation("Service initialization complete. Skipped first cycle bundle printing to avoid stale bundles. Will print new bundles from next cycle.");
+                            _logger?.LogInformation("Service initialization complete. Skipped first cycle bundle printing to avoid stale bundles.");
                         }
 
                         // Check OK Bundle Done signal
@@ -195,10 +302,10 @@ namespace NDTBundlePOC.Core.Services
                     _logger?.LogError(ex, "Error in PLC polling loop");
                 }
 
-                await Task.Delay(_pollingIntervalMs, stoppingToken);
+                await Task.Delay(_pollingIntervalMs, cancellationToken);
             }
 
-            _logger?.LogInformation("PLC Polling Service stopped");
+            _logger?.LogInformation("PLC Polling loop stopped");
         }
 
         private int ReadOKCuts()
@@ -247,7 +354,6 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
-                // Check if error is due to object not existing or address out of range (DB250.DBX6.0 may not be configured)
                 string errorMsg = ex.Message?.ToLower() ?? "";
                 if (errorMsg.Contains("object does not exist") || 
                     errorMsg.Contains("does not exist") ||
@@ -255,16 +361,10 @@ namespace NDTBundlePOC.Core.Services
                     errorMsg.Contains("out of range") ||
                     errorMsg.Contains("address out of range"))
                 {
-                    // Silently handle missing NDT Bundle Done signal - just return false
-                    _logger?.LogDebug("NDT Bundle Done signal (DB250.DBX6.0) not found or out of range in PLC - using bundle completion logic instead");
                     return false;
                 }
-                else
-                {
-                    // Log other errors (connection issues, etc.)
-                    _logger?.LogError(ex, "Error checking NDT Bundle Done signal");
-                    return false;
-                }
+                _logger?.LogError(ex, "Error checking NDT Bundle Done signal");
+                return false;
             }
         }
 
@@ -272,7 +372,6 @@ namespace NDTBundlePOC.Core.Services
         {
             try
             {
-                // Get bundles with Status = 2 (Completed)
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
                 if (readyBundles.Count > 0)
                 {
@@ -281,10 +380,6 @@ namespace NDTBundlePOC.Core.Services
                 
                 foreach (var bundle in readyBundles)
                 {
-                    // Check printing conditions:
-                    // 1. Bundle is complete (Status = 2) ✓ (already filtered)
-                    // 2. PLC signals L1L2_PipeDone
-                    // 3. Bundle is at packing station (PkIn == SectIn)
                     bool pipeDone = CheckOKBundleDone();
                     bool atPackingStation = _plcService != null && _plcService.IsBundleAtPackingStation(_millId);
                     
@@ -329,10 +424,6 @@ namespace NDTBundlePOC.Core.Services
                 if (readyBundles.Count > 0)
                 {
                     _logger?.LogInformation($"Found {readyBundles.Count} NDT bundle(s) ready for printing");
-                    foreach (var b in readyBundles)
-                    {
-                        _logger?.LogInformation($"  - Bundle {b.Bundle_No} (ID: {b.NDTBundle_ID}, Status: {b.Status}, Pcs: {b.NDT_Pcs})");
-                    }
                 }
                 
                 foreach (var bundle in readyBundles)
@@ -365,16 +456,11 @@ namespace NDTBundlePOC.Core.Services
         {
             try
             {
-                // Get the most recent completed OK bundle (Status = 2)
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
                 if (readyBundles.Count > 0)
                 {
                     var bundle = readyBundles.OrderByDescending(b => b.BundleEndTime).First();
                     
-                    // Check printing conditions:
-                    // 1. Bundle is complete (Status = 2) ✓ (already filtered)
-                    // 2. PLC signals L1L2_PipeDone ✓ (this method is called when signal is received)
-                    // 3. Bundle is at packing station (PkIn == SectIn)
                     bool atPackingStation = _plcService != null && _plcService.IsBundleAtPackingStation(_millId);
                     
                     if (atPackingStation)
@@ -388,10 +474,9 @@ namespace NDTBundlePOC.Core.Services
                             _plcService
                         );
 
-                        // Acknowledge to PLC
                         if (_plcService is RealS7PLCService realPlc)
                         {
-                            realPlc.WriteAcknowledgment("DB260.DBX3.4", true); // L2L1_AckPipeDone
+                            realPlc.WriteAcknowledgment("DB260.DBX3.4", true);
                         }
                     }
                     else
@@ -410,7 +495,6 @@ namespace NDTBundlePOC.Core.Services
         {
             try
             {
-                // Get the most recent completed NDT bundle
                 var readyBundles = _ndtBundleService.GetBundlesReadyForPrinting();
                 if (readyBundles.Count > 0)
                 {
@@ -424,10 +508,9 @@ namespace NDTBundlePOC.Core.Services
                         _plcService
                     );
 
-                    // Acknowledge to PLC
                     if (_plcService is RealS7PLCService realPlc)
                     {
-                        realPlc.WriteAcknowledgment("DB260.DBX6.0", true); // L2L1_AckNDTBundleDone
+                        realPlc.WriteAcknowledgment("DB260.DBX6.0", true);
                     }
                 }
             }
@@ -436,12 +519,7 @@ namespace NDTBundlePOC.Core.Services
                 _logger?.LogError(ex, "Error processing NDT bundle print");
             }
         }
-
-        public override void Dispose()
-        {
-            _logger?.LogInformation("PLC Polling Service disposing");
-            base.Dispose();
-        }
     }
 }
+
 
