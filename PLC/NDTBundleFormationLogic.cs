@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Data.SqlClient;
+using Npgsql;
 using System.Diagnostics;
 using System.Configuration;
 
@@ -26,7 +26,7 @@ namespace NDTBundlePOC.PLC
         /// Process NDT cuts and form bundles
         /// Call this method in your main PLC reading loop
         /// </summary>
-        public void Process_NDTBundleFormation(ref SqlCommand sqlcmd, ushort currentNDTCut)
+        public void Process_NDTBundleFormation(ref NpgsqlCommand sqlcmd, ushort currentNDTCut)
         {
             try
             {
@@ -36,12 +36,13 @@ namespace NDTBundlePOC.PLC
                     _previousNDTCut = currentNDTCut;
 
                     // Get current active PO and Slit
-                    sqlcmd.CommandText = @"SELECT TOP 1 PO_Plan_ID, Slit_ID 
-                                           FROM M" + _millId.ToString() + @"_Slit 
-                                           WHERE [Status] = 2 
-                                           ORDER BY SlitMillStartTime DESC";
+                    sqlcmd.CommandText = @"SELECT ""PO_Plan_ID"", ""Slit_ID"" 
+                                           FROM ""M" + _millId.ToString() + @"_Slit"" 
+                                           WHERE ""Status"" = 2 
+                                           ORDER BY ""SlitMillStartTime"" DESC
+                                           LIMIT 1";
 
-                    using (SqlDataReader rdr = sqlcmd.ExecuteReader())
+                    using (NpgsqlDataReader rdr = sqlcmd.ExecuteReader())
                     {
                         if (rdr.Read())
                         {
@@ -50,29 +51,32 @@ namespace NDTBundlePOC.PLC
                             rdr.Close();
 
                             // Get NDT Pcs per bundle from chart
-                            sqlcmd.CommandText = @"SELECT ISNULL(
-                                (SELECT TOP 1 NDT_PcsPerBundle 
-                                 FROM NDT_BundleFormationChart 
-                                 WHERE Mill_ID = " + _millId.ToString() + @" 
-                                   AND (PO_Plan_ID = " + _currentNDTPO_Plan_ID.ToString() + @" OR PO_Plan_ID IS NULL)
-                                   AND IsActive = 1
-                                 ORDER BY PO_Plan_ID DESC), 
-                                (SELECT TOP 1 NDT_PcsPerBundle 
-                                 FROM NDT_BundleFormationChart 
-                                 WHERE Mill_ID = " + _millId.ToString() + @" 
-                                   AND PO_Plan_ID IS NULL 
-                                   AND IsActive = 1), 10)"; // Default to 10 if no config found
+                            sqlcmd.CommandText = @"SELECT COALESCE(
+                                (SELECT ""NDT_PcsPerBundle"" 
+                                 FROM ""NDT_BundleFormationChart"" 
+                                 WHERE ""Mill_ID"" = " + _millId.ToString() + @" 
+                                   AND (""PO_Plan_ID"" = " + _currentNDTPO_Plan_ID.ToString() + @" OR ""PO_Plan_ID"" IS NULL)
+                                   AND ""IsActive"" = 1
+                                 ORDER BY ""PO_Plan_ID"" DESC NULLS LAST
+                                 LIMIT 1), 
+                                (SELECT ""NDT_PcsPerBundle"" 
+                                 FROM ""NDT_BundleFormationChart"" 
+                                 WHERE ""Mill_ID"" = " + _millId.ToString() + @" 
+                                   AND ""PO_Plan_ID"" IS NULL 
+                                   AND ""IsActive"" = 1
+                                 LIMIT 1), 10)"; // Default to 10 if no config found
 
                             int requiredNDTPcs = Convert.ToInt32(sqlcmd.ExecuteScalar());
 
                             // Get current active NDT bundle
-                            sqlcmd.CommandText = @"SELECT TOP 1 NDTBundle_ID, Bundle_No, NDT_Pcs, Batch_No
-                                                  FROM M" + _millId.ToString() + @"_NDTBundles
-                                                  WHERE PO_Plan_ID = " + _currentNDTPO_Plan_ID.ToString() + @"
-                                                    AND [Status] = 1
-                                                  ORDER BY BundleStartTime DESC";
+                            sqlcmd.CommandText = @"SELECT ""NDTBundle_ID"", ""Bundle_No"", ""NDT_Pcs"", ""Batch_No""
+                                                  FROM ""M" + _millId.ToString() + @"_NDTBundles""
+                                                  WHERE ""PO_Plan_ID"" = " + _currentNDTPO_Plan_ID.ToString() + @"
+                                                    AND ""Status"" = 1
+                                                  ORDER BY ""BundleStartTime"" DESC
+                                                  LIMIT 1";
 
-                            using (SqlDataReader bundleRdr = sqlcmd.ExecuteReader())
+                            using (NpgsqlDataReader bundleRdr = sqlcmd.ExecuteReader())
                             {
                                 if (bundleRdr.Read())
                                 {
@@ -85,20 +89,20 @@ namespace NDTBundlePOC.PLC
                                     // Update current bundle
                                     int newTotalNDTPcs = currentNDTPcs + newNDTPcs;
 
-                                    sqlcmd.CommandText = @"UPDATE M" + _millId.ToString() + @"_NDTBundles
-                                                           SET NDT_Pcs = " + newTotalNDTPcs.ToString() + @"
-                                                           WHERE NDTBundle_ID = " + _currentNDTBundleID.ToString();
+                                    sqlcmd.CommandText = @"UPDATE ""M" + _millId.ToString() + @"_NDTBundles""
+                                                           SET ""NDT_Pcs"" = " + newTotalNDTPcs.ToString() + @"
+                                                           WHERE ""NDTBundle_ID"" = " + _currentNDTBundleID.ToString();
                                     sqlcmd.ExecuteNonQuery();
 
                                     // Check if bundle is complete
                                     if (newTotalNDTPcs >= requiredNDTPcs)
                                     {
                                         // End current bundle
-                                        sqlcmd.CommandText = @"UPDATE M" + _millId.ToString() + @"_NDTBundles
-                                                               SET [Status] = 2, 
-                                                                   BundleEndTime = GETDATE(),
-                                                                   IsFullBundle = 1
-                                                               WHERE NDTBundle_ID = " + _currentNDTBundleID.ToString();
+                                        sqlcmd.CommandText = @"UPDATE ""M" + _millId.ToString() + @"_NDTBundles""
+                                                               SET ""Status"" = 2, 
+                                                                   ""BundleEndTime"" = CURRENT_TIMESTAMP,
+                                                                   ""IsFullBundle"" = 1
+                                                               WHERE ""NDTBundle_ID"" = " + _currentNDTBundleID.ToString();
                                         sqlcmd.ExecuteNonQuery();
 
                                         // Generate new batch number in series
@@ -130,12 +134,12 @@ namespace NDTBundlePOC.PLC
             }
         }
 
-        private string GenerateNDTBatchNumber(int poPlanId, string previousBatchNo, ref SqlCommand sqlcmd)
+        private string GenerateNDTBatchNumber(int poPlanId, string previousBatchNo, ref NpgsqlCommand sqlcmd)
         {
             if (string.IsNullOrEmpty(previousBatchNo))
             {
                 // First batch for this PO
-                sqlcmd.CommandText = "SELECT PO_No FROM PO_Plan WHERE PO_Plan_ID = " + poPlanId.ToString();
+                sqlcmd.CommandText = "SELECT \"PO_No\" FROM \"PO_Plan\" WHERE \"PO_Plan_ID\" = " + poPlanId.ToString();
                 string poNo = sqlcmd.ExecuteScalar()?.ToString() ?? "";
                 return "NDT_" + poNo + "001";
             }
@@ -158,13 +162,14 @@ namespace NDTBundlePOC.PLC
             }
         }
 
-        private string CreateNewNDTBundle(int poPlanId, int slitId, string batchNo, ref SqlCommand sqlcmd)
+        private string CreateNewNDTBundle(int poPlanId, int slitId, string batchNo, ref NpgsqlCommand sqlcmd)
         {
             // Generate bundle number (similar to OK bundles: PO_No + sequential number)
-            sqlcmd.CommandText = @"SELECT TOP 1 Bundle_No 
-                                   FROM M" + _millId.ToString() + @"_NDTBundles 
-                                   WHERE PO_Plan_ID = " + poPlanId.ToString() + @"
-                                   ORDER BY NDTBundle_ID DESC";
+            sqlcmd.CommandText = @"SELECT ""Bundle_No"" 
+                                   FROM ""M" + _millId.ToString() + @"_NDTBundles"" 
+                                   WHERE ""PO_Plan_ID"" = " + poPlanId.ToString() + @"
+                                   ORDER BY ""NDTBundle_ID"" DESC
+                                   LIMIT 1";
             var lastBundle = sqlcmd.ExecuteScalar();
 
             string newBundleNo = "";
@@ -191,17 +196,17 @@ namespace NDTBundlePOC.PLC
             }
             else
             {
-                sqlcmd.CommandText = "SELECT PO_No FROM PO_Plan WHERE PO_Plan_ID = " + poPlanId.ToString();
+                sqlcmd.CommandText = "SELECT \"PO_No\" FROM \"PO_Plan\" WHERE \"PO_Plan_ID\" = " + poPlanId.ToString();
                 string poNo = sqlcmd.ExecuteScalar()?.ToString() ?? "";
                 newBundleNo = poNo + "NDT001";
             }
 
             // Insert new bundle
-            sqlcmd.CommandText = @"INSERT INTO M" + _millId.ToString() + @"_NDTBundles 
-                                  (PO_Plan_ID, Slit_ID, Bundle_No, NDT_Pcs, Batch_No, [Status], BundleStartTime)
+            sqlcmd.CommandText = @"INSERT INTO ""M" + _millId.ToString() + @"_NDTBundles"" 
+                                  (""PO_Plan_ID"", ""Slit_ID"", ""Bundle_No"", ""NDT_Pcs"", ""Batch_No"", ""Status"", ""BundleStartTime"")
                                   VALUES (" + poPlanId.ToString() + @", " +
                                   (slitId > 0 ? slitId.ToString() : "NULL") + @", 
-                                  '" + newBundleNo.Replace("'", "''") + @"', 0, '" + batchNo.Replace("'", "''") + @"', 1, GETDATE())";
+                                  '" + newBundleNo.Replace("'", "''") + @"', 0, '" + batchNo.Replace("'", "''") + @"', 1, CURRENT_TIMESTAMP)";
             sqlcmd.ExecuteNonQuery();
 
             return newBundleNo;

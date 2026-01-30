@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,22 +10,48 @@ using NDTBundlePOC.Core.Services;
 using NDTBundlePOC.UI.Web.Hubs;
 using NDTBundlePOC.UI.Web.Services;
 
+// ============================================
+// NDT BUNDLE PRINTING POC - HARDCODED CONFIG
+// ============================================
+// All printer and PLC values are hardcoded in this file.
+// Update the values below to match your hardware:
+//   - PLC IP Address (Siemens S7-1200)
+//   - Printer IP Address (Honeywell PD45S)
+//   - Printer Port (default: 9100 for ZPL)
+//
+// The application will:
+//   1. Connect to PLC at the hardcoded IP address
+//   2. Poll for NDT pipe counts every 1 second
+//   3. Create bundles when 5 NDT pipes are counted
+//   4. Print tags directly to Honeywell printer via ZPL
+// ============================================
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration (appsettings.json is automatically loaded in .NET 10)
-var plcIpAddress = builder.Configuration["PLC:IPAddress"] ?? "192.168.0.74";
-var plcRack = int.Parse(builder.Configuration["PLC:Rack"] ?? "0");
-var plcSlot = int.Parse(builder.Configuration["PLC:Slot"] ?? "1");
-var printerAddress = builder.Configuration["Printer:Address"] ?? "192.168.1.200";
-var printerPort = int.Parse(builder.Configuration["Printer:Port"] ?? "9100");
-var useNetwork = bool.Parse(builder.Configuration["Printer:UseNetwork"] ?? "true");
-var reportTemplatePath = builder.Configuration["Printer:ReportTemplatePath"];
-var exportPath = builder.Configuration["Export:Path"];
-var enablePLCPolling = bool.Parse(builder.Configuration["PLC:EnablePolling"] ?? "false");
-var pollingIntervalMs = int.Parse(builder.Configuration["PLC:PollingIntervalMs"] ?? "1000");
-var millId = int.Parse(builder.Configuration["PLC:MillId"] ?? "1");
-var heartbeatPollingIntervalMs = int.Parse(builder.Configuration["PLC:HeartbeatPollingIntervalMs"] ?? "750");
-var enableHeartbeatMonitoring = bool.Parse(builder.Configuration["PLC:EnableHeartbeatMonitoring"] ?? "true");
+// ============================================
+// HARDCODED CONFIGURATION VALUES
+// ============================================
+// TODO: Update these values with your actual hardware addresses
+
+// PLC Configuration (Siemens S7-300)
+var plcIpAddress = "192.168.0.13";  // Your PLC IP address
+var plcRack = 0;                     // Rack number
+var plcSlot = 2;                     // Slot number for S7-300
+
+// Honeywell PD45S Printer Configuration
+var printerAddress = "192.168.0.125";  // Your printer IP address
+var printerPort = 9100;                 // Standard port for raw printing (ZPL)
+var useNetwork = true;                  // true = Ethernet, false = Serial
+
+// Service Configuration
+var enablePLCPolling = true;            // Enable automatic PLC polling for NDT cuts
+var pollingIntervalMs = 1000;          // Poll PLC every 1 second
+var millId = 1;                        // Mill ID (1 = Mill 1)
+var heartbeatPollingIntervalMs = 750;  // Heartbeat check every 750ms
+var enableHeartbeatMonitoring = true;   // Enable heartbeat monitoring
+
+// Export/Output Path
+var exportPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NDT_Bundle_Exports");
 
 // Add services
 builder.Services.AddSingleton<IDataRepository, InMemoryDataRepository>();
@@ -32,11 +59,17 @@ builder.Services.AddSingleton<INDTBundleService, NDTBundleService>();
 builder.Services.AddSingleton<IOKBundleService, OKBundleService>();
 
 // Use RealS7PLCService for physical PLC connection
+// Hardcoded values: IP=192.168.0.74, Rack=0, Slot=1
 builder.Services.AddSingleton<IPLCService>(sp => new RealS7PLCService());
 
-// Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands, not images)
+// Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands directly to printer)
+// Hardcoded values: IP=192.168.0.125, Port=9100, Network=true
 builder.Services.AddSingleton<IPrinterService>(sp => 
-    new HoneywellPD45SPrinterService(printerAddress, printerPort, useNetwork));
+    new HoneywellPD45SPrinterService(
+        printerAddress: printerAddress,  // Hardcoded: 192.168.0.125
+        printerPort: printerPort,        // Hardcoded: 9100
+        useNetwork: useNetwork           // Hardcoded: true (Ethernet)
+    ));
 
 // Alternative: Use Telerik Reporting for printing (generates images - use for Windows printers or if you have Telerik Reporting installed)
 // builder.Services.AddSingleton<IPrinterService>(sp => 
@@ -104,24 +137,42 @@ var repository = app.Services.GetRequiredService<IDataRepository>();
 var plcService = app.Services.GetRequiredService<IPLCService>();
 if ((enablePLCPolling || enableHeartbeatMonitoring) && !string.IsNullOrEmpty(plcIpAddress))
 {
-    Console.WriteLine($"Connecting to PLC at {plcIpAddress}...");
+    Console.WriteLine("==========================================");
+    Console.WriteLine("  HARDCODED CONFIGURATION");
+    Console.WriteLine("==========================================");
+    Console.WriteLine($"PLC IP Address:    {plcIpAddress}");
+    Console.WriteLine($"PLC Rack:         {plcRack}");
+    Console.WriteLine($"PLC Slot:         {plcSlot}");
+    Console.WriteLine($"Printer IP:       {printerAddress}");
+    Console.WriteLine($"Printer Port:     {printerPort}");
+    Console.WriteLine($"Printer Mode:     {(useNetwork ? "Network (Ethernet)" : "Serial")}");
+    Console.WriteLine($"Mill ID:          {millId}");
+    Console.WriteLine($"PLC Polling:      {(enablePLCPolling ? "ENABLED" : "DISABLED")}");
+    Console.WriteLine($"Heartbeat Monitor: {(enableHeartbeatMonitoring ? "ENABLED" : "DISABLED")}");
+    Console.WriteLine("==========================================");
+    Console.WriteLine($"");
+    Console.WriteLine($"Connecting to PLC at {plcIpAddress} (Rack: {plcRack}, Slot: {plcSlot})...");
     bool connected = plcService.Connect(plcIpAddress, plcRack, plcSlot);
     if (connected)
     {
-        Console.WriteLine("✓ PLC connected.");
+        Console.WriteLine("✓ PLC connected successfully.");
         if (enablePLCPolling)
         {
-            Console.WriteLine("  → Polling service will start automatically.");
+            Console.WriteLine("  → NDT bundle polling service: ENABLED");
+            Console.WriteLine($"  → Polling interval: {pollingIntervalMs}ms");
+            Console.WriteLine($"  → Will print tag for every 5 NDT pipes counted");
         }
         if (enableHeartbeatMonitoring)
         {
-            Console.WriteLine("  → Heartbeat monitoring service will start automatically.");
+            Console.WriteLine("  → Heartbeat monitoring service: ENABLED");
         }
     }
     else
     {
         Console.WriteLine("⚠ Failed to connect to PLC. Services will retry when connection is available.");
+        Console.WriteLine($"  → Verify PLC is powered on and IP address is correct: {plcIpAddress}");
     }
+    Console.WriteLine($"");
 }
 
 // Configure static files
@@ -307,6 +358,49 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
         }
 
         return Results.Ok(new { success = true, message = "No new cuts from PLC" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// System status endpoint
+app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService) =>
+{
+    try
+    {
+        var bundles = ndtBundleService.GetAllNDTBundles();
+        var readyBundles = ndtBundleService.GetBundlesReadyForPrinting();
+        
+        return Results.Ok(new
+        {
+            plc = new
+            {
+                connected = plcService.IsConnected,
+                ipAddress = "192.168.0.13",
+                rack = 0,
+                slot = 2
+            },
+            printer = new
+            {
+                ipAddress = "192.168.0.125",
+                port = 9100,
+                status = "ready" // Will be updated based on test print
+            },
+            ndtCounts = new
+            {
+                totalPipes = bundles.Sum(b => b.NDT_Pcs),
+                bundlesCreated = bundles.Count,
+                tagsPrinted = bundles.Count(b => b.Status == 3)
+            },
+            bundleStatus = new
+            {
+                active = bundles.Count(b => b.Status == 1),
+                ready = readyBundles.Count,
+                printed = bundles.Count(b => b.Status == 3)
+            }
+        });
     }
     catch (Exception ex)
     {

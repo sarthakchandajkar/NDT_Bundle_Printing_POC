@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Data.SqlClient;
+using Npgsql;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -16,17 +16,17 @@ namespace NDTBundlePOC.PLC
         /// <summary>
         /// Create CSV file for NDT Bundle export to SAP
         /// </summary>
-        public static void CreateNDTBundleCSV(string millId, string bundleNo, SqlConnection scon)
+        public static void CreateNDTBundleCSV(string millId, string bundleNo, NpgsqlConnection scon)
         {
             try
             {
                 string fileName = "";
-                using (SqlCommand sql_cmd = new SqlCommand("SP_SAPData_Mill_NDTBundle", scon))
+                // PostgreSQL function call syntax
+                using (NpgsqlCommand sql_cmd = new NpgsqlCommand("SELECT * FROM \"SP_SAPData_Mill_NDTBundle\"(@MillId, @BundleNum)", scon))
                 {
-                    sql_cmd.CommandType = CommandType.StoredProcedure;
-                    sql_cmd.Parameters.Add(new SqlParameter("@MillId", Convert.ToInt32(millId)));
-                    sql_cmd.Parameters.Add(new SqlParameter("@BundleNum", bundleNo));
-                    using (SqlDataReader rdr = sql_cmd.ExecuteReader())
+                    sql_cmd.Parameters.Add(new NpgsqlParameter("@MillId", Convert.ToInt32(millId)));
+                    sql_cmd.Parameters.Add(new NpgsqlParameter("@BundleNum", bundleNo));
+                    using (NpgsqlDataReader rdr = sql_cmd.ExecuteReader())
                     {
                         using (DataTable dt = new DataTable())
                         {
@@ -59,7 +59,7 @@ namespace NDTBundlePOC.PLC
                     sql_cmd.Dispose();
                 }
 
-                // Status = 4 and OprDoneTime = GETDATE() from M1_NDTBundles done in SP
+                // Status = 4 and OprDoneTime = CURRENT_TIMESTAMP from M1_NDTBundles done in PostgreSQL function
                 Trace.WriteLine("NDT Bundle CSV file created: " + bundleNo);
             }
             catch (Exception fex)

@@ -29,7 +29,9 @@ namespace NDTBundlePOC.Core.Services
             } 
         }
 
-        public bool Connect(string ipAddress, int rack = 0, int slot = 1)
+        // HARDCODED DEFAULT VALUES - Update these to match your PLC configuration
+        // Default: Rack=0, Slot=2 (for Siemens S7-300)
+        public bool Connect(string ipAddress, int rack = 0, int slot = 2)
         {
             try
             {
@@ -41,13 +43,14 @@ namespace NDTBundlePOC.Core.Services
 
                     try
                     {
-                        _plc = new Plc(CpuType.S71200, ipAddress, (short)rack, (short)slot);
+                        // Use S7-300 CPU type (not S7-1200)
+                        _plc = new Plc(CpuType.S7300, ipAddress, (short)rack, (short)slot);
                     _plc.Open();
                     
                     if (_plc.IsConnected)
                     {
                         _isConnected = true;
-                        Console.WriteLine($"✓ Connected to Siemens S7-1200 PLC at {ipAddress} (Rack: {rack}, Slot: {slot})");
+                        Console.WriteLine($"✓ Connected to Siemens S7-300 PLC at {ipAddress} (Rack: {rack}, Slot: {slot})");
                         return true;
                     }
                     else
@@ -102,9 +105,14 @@ namespace NDTBundlePOC.Core.Services
                     return 0;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB251.DBW6 (L1L2_NDTCut)
+                // Read from DB251.DBW6 (L1L2_NDTCut) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return 0;
+                    }
+
                 var value = _plc.Read("DB251.DBW6");
                 if (value != null)
                 {
@@ -113,9 +121,8 @@ namespace NDTBundlePOC.Core.Services
                     else if (value is int)
                         return (int)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value (remove when S7netplus is installed)
                 return 0;
             }
             catch (Exception ex)
@@ -134,9 +141,14 @@ namespace NDTBundlePOC.Core.Services
                     return 0;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB251.DBW2 (L1L2_OKCut)
+                // Read from DB251.DBW2 (L1L2_OKCut) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return 0;
+                    }
+
                 var value = _plc.Read("DB251.DBW2");
                 if (value != null)
                 {
@@ -145,9 +157,8 @@ namespace NDTBundlePOC.Core.Services
                     else if (value is int)
                         return (int)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value
                 return 0;
             }
             catch (Exception ex)
@@ -196,17 +207,21 @@ namespace NDTBundlePOC.Core.Services
                     return 0;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB251.DBW8 (L1L2_PLC_PO_ID)
+                // Read from DB251.DBW8 (L1L2_PLC_PO_ID) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return 0;
+                    }
+
                 var value = _plc.Read("DB251.DBW8");
                 if (value != null && value is ushort)
                 {
                     return (int)(ushort)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value
                 return 0;
             }
             catch (Exception ex)
@@ -225,17 +240,21 @@ namespace NDTBundlePOC.Core.Services
                     return 0;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB251.DBW10 (L1L2_PLC_Slit_ID)
+                // Read from DB251.DBW10 (L1L2_PLC_Slit_ID) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return 0;
+                    }
+
                 var value = _plc.Read("DB251.DBW10");
                 if (value != null && value is ushort)
                 {
                     return (int)(ushort)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value
                 return 0;
             }
             catch (Exception ex)
@@ -286,17 +305,21 @@ namespace NDTBundlePOC.Core.Services
                     return false;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB250.DBX3.4 (L1L2_PipeDone)
+                // Read from DB250.DBX3.4 (L1L2_PipeDone) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return false;
+                    }
+
                 var value = _plc.Read("DB250.DBX3.4");
                 if (value != null && value is bool)
                 {
                     return (bool)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value
                 return false;
             }
             catch (Exception ex)
@@ -318,17 +341,21 @@ namespace NDTBundlePOC.Core.Services
                     return false;
                 }
 
-                // TODO: Uncomment when S7netplus is installed
-                /*
-                // Read from DB250.DBX6.0 (L1L2_NDTBundleDone)
+                // Read from DB250.DBX6.0 (L1L2_NDTBundleDone) using S7 protocol
+                lock (_lockObject)
+                {
+                    if (_plc == null || !_plc.IsConnected)
+                    {
+                        return false;
+                    }
+
                 var value = _plc.Read("DB250.DBX6.0");
                 if (value != null && value is bool)
                 {
                     return (bool)value;
                 }
-                */
+                }
 
-                // For POC: Return simulated value
                 return false;
             }
             catch (Exception ex)

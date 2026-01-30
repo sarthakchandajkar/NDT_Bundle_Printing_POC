@@ -518,6 +518,137 @@
             color: #0c5460;
             display: block;
         }
+
+        /* System Monitor Section */
+        .system-monitor {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .system-monitor-header {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .system-monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .monitor-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 12px;
+        }
+
+        .monitor-card-header {
+            font-size: 9pt;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .monitor-card-content {
+            font-size: 9pt;
+        }
+
+        .monitor-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+
+        .monitor-value {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .monitor-label {
+            font-size: 8pt;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+
+        .status-badge.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-badge.testing {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .activity-log {
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 8pt;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+
+        .activity-log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .activity-log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .activity-log-time {
+            color: #6c757d;
+            margin-right: 8px;
+        }
+
+        .refresh-btn {
+            background: #0078D7;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 8pt;
+            height: 24px;
+        }
+
+        .refresh-btn:hover {
+            background: #0066BB;
+        }
     </style>
 </head>
 <body>
@@ -557,6 +688,94 @@
             <div class="heartbeat-field">
                 <div class="heartbeat-field-label">Last Update Time</div>
                 <div class="heartbeat-field-value" id="heartbeatLastUpdate">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Monitor Section -->
+    <div class="system-monitor" id="systemMonitor">
+        <div class="system-monitor-header">
+            <span>System Status Monitor</span>
+            <button class="refresh-btn" onclick="refreshSystemStatus()">Refresh</button>
+        </div>
+        <div class="system-monitor-grid">
+            <!-- PLC Status Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span class="status-dot offline" id="plcStatusDot"></span>
+                    <span>PLC Connection</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-value" id="plcConnectionStatus">Checking...</span>
+                    </div>
+                    <div class="monitor-label">IP: <span id="plcIpAddress">192.168.0.13</span></div>
+                    <div class="monitor-label">Rack: 0, Slot: 2 (S7-300)</div>
+                </div>
+            </div>
+
+            <!-- Printer Status Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span class="status-dot offline" id="printerStatusDot"></span>
+                    <span>Printer Connection</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-value" id="printerConnectionStatus">Checking...</span>
+                    </div>
+                    <div class="monitor-label">IP: <span id="printerIpAddress">192.168.0.125</span></div>
+                    <div class="monitor-label">Port: 9100 (ZPL)</div>
+                </div>
+            </div>
+
+            <!-- NDT Counts Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span>NDT Pipe Counts</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-label">Current Count:</span>
+                        <span class="monitor-value" id="currentNDTCount">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Bundles Created:</span>
+                        <span class="monitor-value" id="bundlesCreated">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Tags Printed:</span>
+                        <span class="monitor-value" id="tagsPrinted">0</span>
+                    </div>
+                    <div class="monitor-label">Threshold: 5 pipes per bundle</div>
+                </div>
+            </div>
+
+            <!-- Bundle Status Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span>Bundle Status</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-label">Active:</span>
+                        <span class="monitor-value" id="activeBundles">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Ready to Print:</span>
+                        <span class="monitor-value" id="readyBundles">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Printed:</span>
+                        <span class="monitor-value" id="printedBundles">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <div class="monitor-card-header">Recent Activity</div>
+            <div class="activity-log" id="activityLog">
+                <div class="activity-log-entry">Waiting for activity...</div>
             </div>
         </div>
     </div>
@@ -664,6 +883,7 @@
         let selectedBundleIds = new Set();
         let activeShops = new Set();
         let heartbeatConnection = null;
+        let systemStatusInterval = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -682,6 +902,10 @@
             
             // Also fetch initial heartbeat status
             fetchHeartbeatStatus();
+            
+            // Initialize system status monitoring
+            refreshSystemStatus();
+            systemStatusInterval = setInterval(refreshSystemStatus, 2000); // Refresh every 2 seconds
         });
 
         // Initialize SignalR connection for heartbeat updates
@@ -807,11 +1031,13 @@
         async function testPrint() {
             const btn = document.getElementById('btnTestPrint');
             const resultDiv = document.getElementById('testPrintResult');
+            const statusDot = document.getElementById('printerStatusDot');
+            const statusText = document.getElementById('printerConnectionStatus');
             
             // Disable button and show loading
             btn.disabled = true;
             resultDiv.className = 'test-print-result loading';
-            resultDiv.textContent = 'Printing test label...';
+            resultDiv.textContent = 'Testing printer connection...';
             resultDiv.style.display = 'block';
             
             try {
@@ -835,12 +1061,20 @@
                             Grade: ${data.printData?.Pipe_Grade || 'N/A'}
                         </small>
                     `;
+                    statusDot.className = 'status-dot online';
+                    statusText.textContent = 'CONNECTED';
+                    statusText.style.color = '#28a745';
+                    addActivityLog('Printer test successful - label printed');
                 } else {
                     resultDiv.className = 'test-print-result error';
                     resultDiv.innerHTML = `
                         <strong>✗ Print Failed</strong><br>
                         ${data.message || 'Unknown error occurred'}
                     `;
+                    statusDot.className = 'status-dot offline';
+                    statusText.textContent = 'ERROR';
+                    statusText.style.color = '#dc3545';
+                    addActivityLog('Printer test failed - check connection');
                 }
             } catch (error) {
                 resultDiv.className = 'test-print-result error';
@@ -849,6 +1083,10 @@
                     Failed to connect to server: ${error.message}<br>
                     <small>Make sure the application is running and check the console for details.</small>
                 `;
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'ERROR';
+                statusText.style.color = '#dc3545';
+                addActivityLog('Printer test error: ' + error.message);
             } finally {
                 // Re-enable button after 2 seconds
                 setTimeout(() => {
@@ -923,12 +1161,21 @@
 
             try {
                 const response = await fetch('/api/bundles');
+                const previousCount = allBundles.length;
                 allBundles = await response.json();
+                
+                if (allBundles.length > previousCount) {
+                    const newCount = allBundles.length - previousCount;
+                    addActivityLog(`Loaded ${allBundles.length} bundles (${newCount} new)`);
+                }
+                
                 applyFilters();
                 initializeFilters();
+                updateBundleStatus();
             } catch (error) {
                 container.innerHTML = `<div class="no-data">Error loading bundles: ${error.message}</div>`;
                 updateStatus('Error loading bundles');
+                addActivityLog('Error loading bundles: ' + error.message);
             }
         }
 
@@ -1129,20 +1376,26 @@
 
             for (const bundleId of bundleIds) {
                 try {
+                    const bundle = allBundles.find(b => b.ndtBundle_ID === bundleId);
                     const response = await fetch(`/api/print/${bundleId}`, {
                         method: 'POST'
                     });
                     const result = await response.json();
                     if (result.success) {
                         successCount++;
+                        addActivityLog(`✓ Printed bundle ${bundle?.bundle_No || bundleId} successfully`);
+                    } else {
+                        addActivityLog(`✗ Failed to print bundle ${bundle?.bundle_No || bundleId}`);
                     }
                 } catch (error) {
                     console.error('Print error:', error);
+                    addActivityLog(`✗ Error printing bundle: ${error.message}`);
                 }
             }
 
             updateStatus(`Printed ${successCount} of ${bundleIds.length} bundles`);
-            loadBundles();
+            await loadBundles();
+            refreshSystemStatus();
         }
 
         function contextPrint(isReprint) {
@@ -1182,6 +1435,208 @@
         function showViewLog() {
             alert('View Log functionality not implemented');
         }
+
+        // System Status Monitoring Functions
+        async function refreshSystemStatus() {
+            try {
+                // Get comprehensive system status
+                const response = await fetch('/api/system-status');
+                const data = await response.json();
+                
+                // Update PLC Status
+                updatePLCStatusDisplay(data.plc);
+                
+                // Update Printer Status
+                updatePrinterStatusDisplay(data.printer);
+                
+                // Update NDT Counts
+                document.getElementById('currentNDTCount').textContent = data.ndtCounts.totalPipes;
+                document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated;
+                document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted;
+                
+                // Update Bundle Status
+                document.getElementById('activeBundles').textContent = data.bundleStatus.active;
+                document.getElementById('readyBundles').textContent = data.bundleStatus.ready;
+                document.getElementById('printedBundles').textContent = data.bundleStatus.printed;
+            } catch (error) {
+                console.error('Error refreshing system status:', error);
+                // Fallback to individual checks
+                await Promise.all([
+                    checkPLCStatus(),
+                    checkPrinterStatus(),
+                    updateNDTCounts(),
+                    updateBundleStatus()
+                ]);
+            }
+        }
+
+        function updatePLCStatusDisplay(plcData) {
+            const statusDot = document.getElementById('plcStatusDot');
+            const statusText = document.getElementById('plcConnectionStatus');
+            
+            if (plcData.connected) {
+                statusDot.className = 'status-dot online';
+                statusText.textContent = 'CONNECTED';
+                statusText.style.color = '#28a745';
+            } else {
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'DISCONNECTED';
+                statusText.style.color = '#dc3545';
+            }
+        }
+
+        function updatePrinterStatusDisplay(printerData) {
+            const statusDot = document.getElementById('printerStatusDot');
+            const statusText = document.getElementById('printerConnectionStatus');
+            
+            if (printerData.status === 'connected' || printerData.status === 'ready') {
+                statusDot.className = printerData.status === 'connected' ? 'status-dot online' : 'status-dot waiting';
+                statusText.textContent = printerData.status === 'connected' ? 'CONNECTED' : 'READY';
+                statusText.style.color = printerData.status === 'connected' ? '#28a745' : '#ffc107';
+            } else {
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'ERROR';
+                statusText.style.color = '#dc3545';
+            }
+        }
+
+        async function checkPLCStatus() {
+            try {
+                const response = await fetch('/api/plc/status');
+                const data = await response.json();
+                
+                const statusDot = document.getElementById('plcStatusDot');
+                const statusText = document.getElementById('plcConnectionStatus');
+                
+                if (data.connected) {
+                    statusDot.className = 'status-dot online';
+                    statusText.textContent = 'CONNECTED';
+                    statusText.style.color = '#28a745';
+                    addActivityLog('PLC connected successfully');
+                } else {
+                    statusDot.className = 'status-dot offline';
+                    statusText.textContent = 'DISCONNECTED';
+                    statusText.style.color = '#dc3545';
+                }
+            } catch (error) {
+                const statusDot = document.getElementById('plcStatusDot');
+                const statusText = document.getElementById('plcConnectionStatus');
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'ERROR';
+                statusText.style.color = '#dc3545';
+                addActivityLog('Error checking PLC status: ' + error.message);
+            }
+        }
+
+        async function checkPrinterStatus() {
+            // Test printer by attempting a connection check
+            // For now, we'll check if test print works
+            const statusDot = document.getElementById('printerStatusDot');
+            const statusText = document.getElementById('printerConnectionStatus');
+            
+            // Since we can't directly ping the printer from browser,
+            // we'll mark it as "Ready" and test on actual print
+            statusDot.className = 'status-dot waiting';
+            statusText.textContent = 'READY';
+            statusText.style.color = '#ffc107';
+        }
+
+        async function updateNDTCounts() {
+            try {
+                // Get current NDT count from PLC
+                const heartbeatResponse = await fetch('/api/plc/heartbeat');
+                const heartbeatData = await heartbeatResponse.json();
+                
+                // Get bundles data
+                const bundlesResponse = await fetch('/api/bundles');
+                const bundles = await bundlesResponse.json();
+                
+                // Calculate statistics
+                const totalNDTPcs = bundles.reduce((sum, b) => sum + (b.ndt_Pcs || 0), 0);
+                const printedCount = bundles.filter(b => b.status === 3).length;
+                
+                document.getElementById('currentNDTCount').textContent = totalNDTPcs;
+                document.getElementById('bundlesCreated').textContent = bundles.length;
+                document.getElementById('tagsPrinted').textContent = printedCount;
+                
+                // Update bundle status
+                updateBundleStatus();
+            } catch (error) {
+                console.error('Error updating NDT counts:', error);
+            }
+        }
+
+        function updateBundleStatus() {
+            const active = allBundles.filter(b => b.status === 1).length;
+            const ready = allBundles.filter(b => b.status === 2).length;
+            const printed = allBundles.filter(b => b.status === 3).length;
+            
+            document.getElementById('activeBundles').textContent = active;
+            document.getElementById('readyBundles').textContent = ready;
+            document.getElementById('printedBundles').textContent = printed;
+        }
+
+        function addActivityLog(message) {
+            const log = document.getElementById('activityLog');
+            const entry = document.createElement('div');
+            entry.className = 'activity-log-entry';
+            
+            const time = new Date();
+            const timeStr = time.toLocaleTimeString();
+            
+            entry.innerHTML = `<span class="activity-log-time">[${timeStr}]</span>${message}`;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+
+        // Enhanced loadBundles to add activity log
+        const originalLoadBundles = loadBundles;
+        loadBundles = async function() {
+            await originalLoadBundles();
+            updateBundleStatus();
+            updateNDTCounts();
+        };
+
+        // Monitor for new bundles and status changes (check every 3 seconds)
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/bundles');
+                const newBundles = await response.json();
+                
+                // Check for new bundles
+                if (newBundles.length !== allBundles.length) {
+                    const newCount = newBundles.length - allBundles.length;
+                    if (newCount > 0) {
+                        addActivityLog(`✓ New bundle created: ${newCount} bundle(s) added`);
+                        await loadBundles();
+                        refreshSystemStatus();
+                    }
+                }
+                
+                // Check for status changes
+                newBundles.forEach(newBundle => {
+                    const oldBundle = allBundles.find(b => b.ndtBundle_ID === newBundle.ndtBundle_ID);
+                    if (oldBundle && oldBundle.status !== newBundle.status) {
+                        if (newBundle.status === 2) {
+                            addActivityLog(`✓ Bundle ${newBundle.bundle_No} ready for printing (${newBundle.ndt_Pcs} pipes)`);
+                        } else if (newBundle.status === 3) {
+                            addActivityLog(`✓ Bundle ${newBundle.bundle_No} printed successfully`);
+                        }
+                    }
+                });
+                
+                // Update allBundles for next comparison
+                allBundles = newBundles;
+            } catch (error) {
+                console.error('Error checking for new bundles:', error);
+            }
+        }, 3000);
     </script>
 </body>
 </html>

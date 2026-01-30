@@ -16,7 +16,9 @@ namespace NDTBundlePOC.Core.Services
         private readonly bool _useNetwork; // true for Ethernet, false for serial
         private readonly string _outputPath; // For fallback file output
 
-        public HoneywellPD45SPrinterService(string printerAddress = "192.168.1.200", int printerPort = 9100, bool useNetwork = true, string outputPath = null)
+        // HARDCODED DEFAULT VALUES - Your printer configuration
+        // Default: IP=192.168.0.125, Port=9100 (ZPL), Network=true (Ethernet)
+        public HoneywellPD45SPrinterService(string printerAddress = "192.168.0.125", int printerPort = 9100, bool useNetwork = true, string outputPath = null)
         {
             _printerAddress = printerAddress;
             _printerPort = printerPort;
@@ -130,9 +132,9 @@ namespace NDTBundlePOC.Core.Services
             finally
             {
                 try
-                {
-                    stream?.Close();
-                    tcpClient?.Close();
+            {
+                stream?.Close();
+                tcpClient?.Close();
                 }
                 catch { }
             }

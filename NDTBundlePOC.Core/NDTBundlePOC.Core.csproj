@@ -20,6 +20,10 @@
     <!-- For background services -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <!-- For PostgreSQL/Supabase connectivity -->
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+    <!-- For ConfigurationManager support in .NET Core -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.0" />
     <!-- Telerik Reporting -->
     <!-- NOTE: Telerik Reporting requires a license and private NuGet feed -->
     <!-- See TELERIK_SETUP.md for installation instructions -->

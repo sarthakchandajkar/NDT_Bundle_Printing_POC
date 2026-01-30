@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Data.SqlClient;
+using Npgsql;
 using System.Diagnostics;
 using System.Configuration;
 using System.Threading;
@@ -27,12 +27,12 @@ namespace NDTBundlePOC.PLC
         /// Process NDT bundle print trigger from PLC
         /// Call this when L1L2_NDTBundleDone is true and L2L1_AckNDTBundleDone is false
         /// </summary>
-        public void Process_NDTBundlePrint(ref SqlCommand sqlcmd, ushort slitIdFromPLC)
+        public void Process_NDTBundlePrint(ref NpgsqlCommand sqlcmd, ushort slitIdFromPLC)
         {
             string slitIdStr = slitIdFromPLC.ToString();
 
-            sqlcmd.CommandText = "SELECT Slit_ID FROM M" + _millId.ToString() +
-                                "_Slit WHERE [Status] = 2 AND PLC_SlitID = " + slitIdStr;
+            sqlcmd.CommandText = "SELECT \"Slit_ID\" FROM \"M" + _millId.ToString() +
+                                "_Slit\" WHERE \"Status\" = 2 AND \"PLC_SlitID\" = " + slitIdStr;
             var Slit_ID = sqlcmd.ExecuteScalar();
 
             if (Slit_ID == null || Slit_ID == DBNull.Value)
@@ -42,14 +42,14 @@ namespace NDTBundlePOC.PLC
             }
 
             // Get completed NDT bundle (Status = 2)
-            sqlcmd.CommandText = @"SELECT TOP 1 
-                                    NDTBundle_ID, Bundle_No, PO_Plan_ID
-                                   FROM M" + _millId.ToString() + @"_NDTBundles
-                                   WHERE Slit_ID = " + Slit_ID.ToString() + @"
-                                     AND [Status] = 2
-                                   ORDER BY BundleEndTime DESC";
+            sqlcmd.CommandText = @"SELECT ""NDTBundle_ID"", ""Bundle_No"", ""PO_Plan_ID""
+                                   FROM ""M" + _millId.ToString() + @"_NDTBundles""
+                                   WHERE ""Slit_ID"" = " + Slit_ID.ToString() + @"
+                                     AND ""Status"" = 2
+                                   ORDER BY ""BundleEndTime"" DESC
+                                   LIMIT 1";
 
-            using (SqlDataReader rdr = sqlcmd.ExecuteReader())
+            using (NpgsqlDataReader rdr = sqlcmd.ExecuteReader())
             {
                 if (rdr.Read())
                 {
@@ -70,8 +70,8 @@ namespace NDTBundlePOC.PLC
                         });
 
                     // Update bundle status to 3 (Printed)
-                    sqlcmd.CommandText = "UPDATE M" + _millId.ToString() +
-                        "_NDTBundles SET [Status] = 3, OprDoneTime = GETDATE() WHERE Bundle_No = '" + bundleNo.Replace("'", "''") + "'";
+                    sqlcmd.CommandText = "UPDATE \"M" + _millId.ToString() +
+                        "_NDTBundles\" SET \"Status\" = 3, \"OprDoneTime\" = CURRENT_TIMESTAMP WHERE \"Bundle_No\" = '" + bundleNo.Replace("'", "''") + "'";
                     sqlcmd.ExecuteNonQuery();
 
                     Trace.WriteLine("NDT Bundle print triggered: " + bundleNo);
@@ -88,12 +88,12 @@ namespace NDTBundlePOC.PLC
         /// Process NDT bundle reprint trigger from PLC
         /// Call this when L1L2_NDTBundleReprint is true and L2L1_AckNDTBundleReprint is false
         /// </summary>
-        public void Process_NDTBundleReprint(ref SqlCommand sqlcmd, ushort slitIdFromPLC)
+        public void Process_NDTBundleReprint(ref NpgsqlCommand sqlcmd, ushort slitIdFromPLC)
         {
             string slitIdStr = slitIdFromPLC.ToString();
 
-            sqlcmd.CommandText = "SELECT Slit_ID FROM M" + _millId.ToString() +
-                                "_Slit WHERE [Status] = 2 AND PLC_SlitID = " + slitIdStr;
+            sqlcmd.CommandText = "SELECT \"Slit_ID\" FROM \"M" + _millId.ToString() +
+                                "_Slit\" WHERE \"Status\" = 2 AND \"PLC_SlitID\" = " + slitIdStr;
             var Slit_ID = sqlcmd.ExecuteScalar();
 
             if (Slit_ID == null || Slit_ID == DBNull.Value)
@@ -103,14 +103,14 @@ namespace NDTBundlePOC.PLC
             }
 
             // Get last printed NDT bundle
-            sqlcmd.CommandText = @"SELECT TOP 1 
-                                    NDTBundle_ID, Bundle_No, PO_Plan_ID
-                                   FROM M" + _millId.ToString() + @"_NDTBundles
-                                   WHERE Slit_ID = " + Slit_ID.ToString() + @"
-                                     AND [Status] >= 3
-                                   ORDER BY OprDoneTime DESC";
+            sqlcmd.CommandText = @"SELECT ""NDTBundle_ID"", ""Bundle_No"", ""PO_Plan_ID""
+                                   FROM ""M" + _millId.ToString() + @"_NDTBundles""
+                                   WHERE ""Slit_ID"" = " + Slit_ID.ToString() + @"
+                                     AND ""Status"" >= 3
+                                   ORDER BY ""OprDoneTime"" DESC
+                                   LIMIT 1";
 
-            using (SqlDataReader rdr = sqlcmd.ExecuteReader())
+            using (NpgsqlDataReader rdr = sqlcmd.ExecuteReader())
             {
                 if (rdr.Read())
                 {
@@ -131,8 +131,8 @@ namespace NDTBundlePOC.PLC
                         });
 
                     // Update last reprint time
-                    sqlcmd.CommandText = "UPDATE M" + _millId.ToString() +
-                        "_NDTBundles SET LastReprintDttm = GETDATE() WHERE Bundle_No = '" + bundleNo.Replace("'", "''") + "'";
+                    sqlcmd.CommandText = "UPDATE \"M" + _millId.ToString() +
+                        "_NDTBundles\" SET \"LastReprintDttm\" = CURRENT_TIMESTAMP WHERE \"Bundle_No\" = '" + bundleNo.Replace("'", "''") + "'";
                     sqlcmd.ExecuteNonQuery();
 
                     Trace.WriteLine("NDT Bundle reprint triggered: " + bundleNo);
@@ -154,19 +154,15 @@ namespace NDTBundlePOC.PLC
 
             try
             {
-                using (SqlConnection sqlcon = new SqlConnection(
-                    ConfigurationManager.ConnectionStrings["ServerConnectionString"].ConnectionString))
-                {
-                    sqlcon.Open();
-                    using (SqlCommand sqlcmd = new SqlCommand("", sqlcon))
-                    {
-                        // Get NDT printer name
-                        sqlcmd.CommandText = "SELECT DeviceName FROM PlantDevice WHERE DeviceAbbr = 'M" +
-                            pd.MillNo.ToString() + "NDTPrinter'";
-                        PrinterName = sqlcmd.ExecuteScalar()?.ToString() ?? "Honeywell_PD45S_NDT";
-                    }
-                    sqlcon.Close();
-                }
+                // HARDCODED PRINTER CONFIGURATION
+                // Your printer IP address
+                string printerIpAddress = "192.168.0.125";  // Honeywell PD45S printer IP
+                int printerPort = 9100;                      // Standard ZPL port
+                
+                // Use hardcoded printer name instead of reading from database
+                PrinterName = "Honeywell_PD45S_NDT";
+                
+                Console.WriteLine($"→ Using hardcoded printer: {PrinterName} at {printerIpAddress}:{printerPort}");
 
                 // Obtain printer settings
                 PrinterSettings printerSettings = new PrinterSettings();
@@ -195,7 +191,7 @@ namespace NDTBundlePOC.PLC
                 Trace.WriteLine("NDT Bundle tag printed: " + pd.BundleNo);
 
                 // Export to CSV after successful print
-                using (SqlConnection sqlcon = new SqlConnection(
+                using (NpgsqlConnection sqlcon = new NpgsqlConnection(
                     ConfigurationManager.ConnectionStrings["ServerConnectionString"].ConnectionString))
                 {
                     sqlcon.Open();

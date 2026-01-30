@@ -704,8 +704,8 @@ namespace NDTBundlePOC.UI
                 var bundleIdValue = selectedRows[0].Cells["NDTBundle_ID"].Value;
                 if (bundleIdValue is int bundleId)
                 {
-                    var bundleNo = selectedRows[0].Cells["Bundle_No"].Value?.ToString() ?? "";
-                    ShowPrintDialog(bundleNo, isReprint, bundleId);
+                var bundleNo = selectedRows[0].Cells["Bundle_No"].Value?.ToString() ?? "";
+                ShowPrintDialog(bundleNo, isReprint, bundleId);
                 }
             }
             else

@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace IIOTReport
 {
-    partial class Rpt_MillLabel
+    partial class Rpt_NDTLabel
     {
         #region Component Designer generated code
         /// <summary>
@@ -13,7 +13,7 @@ namespace IIOTReport
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Rpt_MillLabel));
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Rpt_NDTLabel));
             Telerik.Reporting.Barcodes.Code128Encoder code128Encoder1 = new Telerik.Reporting.Barcodes.Code128Encoder();
             Telerik.Reporting.Barcodes.Code128Encoder code128Encoder2 = new Telerik.Reporting.Barcodes.Code128Encoder();
             Telerik.Reporting.ReportParameter reportParameter1 = new Telerik.Reporting.ReportParameter();
@@ -397,11 +397,11 @@ namespace IIOTReport
             this.reprintInd.StyleName = "";
             this.reprintInd.Value = "";
             // 
-            // Rpt_MillLabel
+            // Rpt_NDTLabel
             // 
             this.Items.AddRange(new Telerik.Reporting.ReportItemBase[] {
             this.detail});
-            this.Name = "Rpt_Sticker";
+            this.Name = "Rpt_NDTLabel";
             this.PageSettings.ContinuousPaper = false;
             this.PageSettings.Landscape = false;
             this.PageSettings.Margins = new Telerik.Reporting.Drawing.MarginsU(Telerik.Reporting.Drawing.Unit.Mm(0D), Telerik.Reporting.Drawing.Unit.Mm(0D), Telerik.Reporting.Drawing.Unit.Mm(0D), Telerik.Reporting.Drawing.Unit.Mm(0D));
@@ -413,7 +413,7 @@ namespace IIOTReport
             reportParameter2.Name = "MillPOId";
             reportParameter2.Type = Telerik.Reporting.ReportParameterType.Integer;
             reportParameter2.Value = "";
-            reportParameter3.Name = "MillBundleID";
+            reportParameter3.Name = "NDTBundleID";
             reportParameter3.Type = Telerik.Reporting.ReportParameterType.Integer;
             reportParameter3.Value = "";
             reportParameter4.Name = "ConnectionString";
@@ -436,7 +436,7 @@ namespace IIOTReport
             styleRule1});
             this.UnitOfMeasure = Telerik.Reporting.Drawing.UnitType.Mm;
             this.Width = Telerik.Reporting.Drawing.Unit.Cm(10D);
-            this.NeedDataSource += new System.EventHandler(this.Rpt_MillLabel_NeedDataSource);
+            this.NeedDataSource += new System.EventHandler(this.Rpt_NDTLabel_NeedDataSource);
             ((System.ComponentModel.ISupportInitialize)(this.eventLog1)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this)).EndInit();
 
@@ -467,3 +467,4 @@ namespace IIOTReport
         internal Telerik.Reporting.TextBox reprintInd;
     }
 }
+
