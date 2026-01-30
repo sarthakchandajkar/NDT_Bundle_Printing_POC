@@ -251,16 +251,34 @@ app.MapHub<HeartbeatHub>("/heartbeathub");
 // API endpoints
 app.MapGet("/api/bundles", (INDTBundleService bundleService) =>
 {
-    // Return all bundles for UI display (not just ready for printing)
-    var bundles = bundleService.GetAllNDTBundles();
-    return Results.Ok(bundles);
+    try
+    {
+        // Return all bundles for UI display (not just ready for printing)
+        var bundles = bundleService.GetAllNDTBundles();
+        return Results.Ok(bundles);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Error in /api/bundles endpoint: {ex.Message}");
+        // Return empty list instead of error to allow UI to continue
+        return Results.Ok(new List<NDTBundle>());
+    }
 });
 
 app.MapGet("/api/ok-bundles", (IOKBundleService okBundleService) =>
 {
-    // Return all OK bundles for UI display (not just ready for printing)
-    var bundles = okBundleService.GetAllOKBundles();
-    return Results.Ok(bundles);
+    try
+    {
+        // Return all OK bundles for UI display (not just ready for printing)
+        var bundles = okBundleService.GetAllOKBundles();
+        return Results.Ok(bundles);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Error in /api/ok-bundles endpoint: {ex.Message}");
+        // Return empty list instead of error to allow UI to continue
+        return Results.Ok(new List<OKBundle>());
+    }
 });
 
 app.MapPost("/api/ndt-cuts", (INDTBundleService bundleService, int cuts) =>

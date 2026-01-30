@@ -14,7 +14,23 @@ namespace NDTBundlePOC.Core.Services
         public SupabaseDataRepository(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("ServerConnectionString") 
-                ?? throw new InvalidOperationException("ServerConnectionString not found in configuration");
+                ?? throw new InvalidOperationException(
+                    "ServerConnectionString not found in configuration. " +
+                    "Please add it to appsettings.json: " +
+                    "\"ConnectionStrings\": { \"ServerConnectionString\": \"Host=db.xxxxx.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=xxx;SSL Mode=Require;\" }");
+            
+            // Validate connection string format
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                throw new InvalidOperationException("ServerConnectionString is empty. Please configure it in appsettings.json");
+            }
+            
+            // Log connection string (without password) for debugging
+            var host = ExtractHostFromConnectionString();
+            if (host != "Unknown")
+            {
+                Console.WriteLine($"→ Database connection configured for host: {host}");
+            }
         }
 
         private NpgsqlConnection GetConnection()
@@ -26,37 +42,83 @@ namespace NDTBundlePOC.Core.Services
         public List<NDTBundle> GetNDTBundles()
         {
             var bundles = new List<NDTBundle>();
-            using (var conn = GetConnection())
+            try
             {
-                conn.Open();
-                using (var cmd = new NpgsqlCommand(@"SELECT ""NDTBundle_ID"", ""PO_Plan_ID"", ""Slit_ID"", ""Bundle_No"", ""NDT_Pcs"", ""Bundle_Wt"", ""Status"", ""IsFullBundle"", ""BundleStartTime"", ""BundleEndTime"", ""OprDoneTime"", ""Batch_No""
-                                                    FROM ""M1_NDTBundles""
-                                                    ORDER BY ""NDTBundle_ID"" DESC", conn))
+                using (var conn = GetConnection())
                 {
-                    using (var rdr = cmd.ExecuteReader())
+                    conn.Open();
+                    using (var cmd = new NpgsqlCommand(@"SELECT ""NDTBundle_ID"", ""PO_Plan_ID"", ""Slit_ID"", ""Bundle_No"", ""NDT_Pcs"", ""Bundle_Wt"", ""Status"", ""IsFullBundle"", ""BundleStartTime"", ""BundleEndTime"", ""OprDoneTime"", ""Batch_No""
+                                                        FROM ""M1_NDTBundles""
+                                                        ORDER BY ""NDTBundle_ID"" DESC", conn))
                     {
-                        while (rdr.Read())
+                        using (var rdr = cmd.ExecuteReader())
                         {
-                            bundles.Add(new NDTBundle
+                            while (rdr.Read())
                             {
-                                NDTBundle_ID = Convert.ToInt32(rdr["NDTBundle_ID"]),
-                                PO_Plan_ID = Convert.ToInt32(rdr["PO_Plan_ID"]),
-                                Slit_ID = rdr["Slit_ID"] == DBNull.Value ? null : Convert.ToInt32(rdr["Slit_ID"]),
-                                Bundle_No = rdr["Bundle_No"]?.ToString() ?? "",
-                                NDT_Pcs = Convert.ToInt32(rdr["NDT_Pcs"]),
-                                Bundle_Wt = Convert.ToDecimal(rdr["Bundle_Wt"]),
-                                Status = Convert.ToInt32(rdr["Status"]),
-                                IsFullBundle = Convert.ToBoolean(rdr["IsFullBundle"]),
-                                BundleStartTime = Convert.ToDateTime(rdr["BundleStartTime"]),
-                                BundleEndTime = rdr["BundleEndTime"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(rdr["BundleEndTime"]),
-                                OprDoneTime = rdr["OprDoneTime"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(rdr["OprDoneTime"]),
-                                Batch_No = rdr["Batch_No"]?.ToString()
-                            });
+                                bundles.Add(new NDTBundle
+                                {
+                                    NDTBundle_ID = Convert.ToInt32(rdr["NDTBundle_ID"]),
+                                    PO_Plan_ID = Convert.ToInt32(rdr["PO_Plan_ID"]),
+                                    Slit_ID = rdr["Slit_ID"] == DBNull.Value ? null : Convert.ToInt32(rdr["Slit_ID"]),
+                                    Bundle_No = rdr["Bundle_No"]?.ToString() ?? "",
+                                    NDT_Pcs = Convert.ToInt32(rdr["NDT_Pcs"]),
+                                    Bundle_Wt = Convert.ToDecimal(rdr["Bundle_Wt"]),
+                                    Status = Convert.ToInt32(rdr["Status"]),
+                                    IsFullBundle = Convert.ToBoolean(rdr["IsFullBundle"]),
+                                    BundleStartTime = Convert.ToDateTime(rdr["BundleStartTime"]),
+                                    BundleEndTime = rdr["BundleEndTime"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(rdr["BundleEndTime"]),
+                                    OprDoneTime = rdr["OprDoneTime"] == DBNull.Value ? null : (DateTime?)Convert.ToDateTime(rdr["OprDoneTime"]),
+                                    Batch_No = rdr["Batch_No"]?.ToString()
+                                });
+                            }
                         }
                     }
                 }
             }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"✗ Database connection error in GetNDTBundles: {ex.Message}");
+                Console.WriteLine($"  → Check your connection string in appsettings.json");
+                Console.WriteLine($"  → Verify Supabase hostname is correct and accessible");
+                // Return empty list instead of throwing - allows application to continue
+                return new List<NDTBundle>();
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                Console.WriteLine($"✗ Network error connecting to database: {ex.Message}");
+                Console.WriteLine($"  → Check your internet connection");
+                Console.WriteLine($"  → Verify Supabase hostname is correct: {ExtractHostFromConnectionString()}");
+                // Return empty list instead of throwing - allows application to continue
+                return new List<NDTBundle>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error in GetNDTBundles: {ex.Message}");
+                Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
+                // Return empty list instead of throwing - allows application to continue
+                return new List<NDTBundle>();
+            }
             return bundles;
+        }
+
+        private string ExtractHostFromConnectionString()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_connectionString))
+                    return "Unknown";
+                
+                var parts = _connectionString.Split(';');
+                foreach (var part in parts)
+                {
+                    if (part.Trim().StartsWith("Host=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return part.Split('=')[1].Trim();
+                    }
+                }
+            }
+            catch { }
+            return "Unknown";
         }
 
         public NDTBundle GetNDTBundle(int bundleId)
