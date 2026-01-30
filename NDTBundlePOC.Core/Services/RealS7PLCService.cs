@@ -331,6 +331,7 @@ namespace NDTBundlePOC.Core.Services
 
         /// <summary>
         /// Read NDT Bundle Done signal from PLC (DB250.DBX6.0)
+        /// Note: If DB250.DBX6.0 doesn't exist in PLC, returns false silently
         /// </summary>
         public bool ReadNDTBundleDone(int millId)
         {
@@ -360,6 +361,17 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
+                // Check if error is due to object not existing (common when DB block not configured)
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found"))
+                {
+                    // Silently return false if object doesn't exist (DB250.DBX6.0 may not be configured)
+                    return false;
+                }
+                
+                // Log other errors (connection issues, etc.)
                 Console.WriteLine($"✗ Error reading NDT Bundle Done from PLC: {ex.Message}");
                 return false;
             }
@@ -369,6 +381,7 @@ namespace NDTBundlePOC.Core.Services
         /// Read heartbeat value from PLC (DB1.DBW6 - L1_Heart_Beat)
         /// Returns: Continuous counter from 1 to 127, then resets to 1
         /// All values 1-127 indicate PLC is ONLINE and responding
+        /// Note: If DB1.DBW6 doesn't exist in PLC, returns -1 silently
         /// </summary>
         public int ReadHeartbeat()
         {
@@ -402,6 +415,17 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
+                // Check if error is due to object not existing (common when DB block not configured)
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found"))
+                {
+                    // Silently return -1 if object doesn't exist (DB1.DBW6 may not be configured)
+                    return -1;
+                }
+                
+                // Log other errors (connection issues, etc.)
                 Console.WriteLine($"✗ Error reading heartbeat from PLC: {ex.Message}");
                 return -1; // Error reading
             }

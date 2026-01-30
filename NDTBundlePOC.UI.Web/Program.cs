@@ -312,7 +312,7 @@ app.MapGet("/api/plc/heartbeat", (IPLCService plcService) =>
 
         int heartbeatValue = plcService.ReadHeartbeat();
         // All values 1-127 indicate PLC is ONLINE (continuous counter)
-        // Value -1 indicates OFFLINE (not connected)
+        // Value -1 indicates OFFLINE (not connected or object doesn't exist)
         string plcStatus = (heartbeatValue >= 1 && heartbeatValue <= 127) ? "ONLINE" : "OFFLINE";
 
         return Results.Ok(new 
@@ -325,6 +325,20 @@ app.MapGet("/api/plc/heartbeat", (IPLCService plcService) =>
     }
     catch (Exception ex)
     {
+        // Handle gracefully - if heartbeat object doesn't exist, return offline status
+        string errorMsg = ex.Message?.ToLower() ?? "";
+        if (errorMsg.Contains("object does not exist") || 
+            errorMsg.Contains("does not exist") ||
+            errorMsg.Contains("not found"))
+        {
+            return Results.Ok(new 
+            { 
+                heartbeatValue = -1, 
+                plcStatus = "OFFLINE",
+                plcIp = plcIpAddress,
+                lastUpdateTime = DateTime.UtcNow
+            });
+        }
         return Results.BadRequest(new { success = false, message = ex.Message });
     }
 });

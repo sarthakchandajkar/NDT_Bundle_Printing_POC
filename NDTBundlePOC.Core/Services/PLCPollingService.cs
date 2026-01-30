@@ -178,8 +178,22 @@ namespace NDTBundlePOC.Core.Services
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error checking NDT Bundle Done signal");
-                return false;
+                // Check if error is due to object not existing (DB250.DBX6.0 may not be configured)
+                string errorMsg = ex.Message?.ToLower() ?? "";
+                if (errorMsg.Contains("object does not exist") || 
+                    errorMsg.Contains("does not exist") ||
+                    errorMsg.Contains("not found"))
+                {
+                    // Silently handle missing NDT Bundle Done signal - just return false
+                    _logger?.LogDebug("NDT Bundle Done signal (DB250.DBX6.0) not found in PLC - using bundle completion logic instead");
+                    return false;
+                }
+                else
+                {
+                    // Log other errors (connection issues, etc.)
+                    _logger?.LogError(ex, "Error checking NDT Bundle Done signal");
+                    return false;
+                }
             }
         }
 

@@ -70,8 +70,22 @@ namespace NDTBundlePOC.Core.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error reading PLC heartbeat");
-                    await _notifier.NotifyHeartbeatUpdate(-1, "OFFLINE", _plcIp);
+                    // Check if error is due to object not existing (DB1.DBW6 may not be configured)
+                    string errorMsg = ex.Message?.ToLower() ?? "";
+                    if (errorMsg.Contains("object does not exist") || 
+                        errorMsg.Contains("does not exist") ||
+                        errorMsg.Contains("not found"))
+                    {
+                        // Silently handle missing heartbeat object - just mark as offline
+                        await _notifier.NotifyHeartbeatUpdate(-1, "OFFLINE", _plcIp);
+                        _logger.LogDebug("Heartbeat object (DB1.DBW6) not found in PLC - monitoring disabled");
+                    }
+                    else
+                    {
+                        // Log other errors (connection issues, etc.)
+                        _logger.LogError(ex, "Error reading PLC heartbeat");
+                        await _notifier.NotifyHeartbeatUpdate(-1, "OFFLINE", _plcIp);
+                    }
                 }
 
                 await Task.Delay(_pollingIntervalMs, stoppingToken);
