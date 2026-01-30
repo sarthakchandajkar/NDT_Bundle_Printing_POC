@@ -30,6 +30,63 @@ namespace NDTBundlePOC.Core.Services
             if (host != "Unknown")
             {
                 Console.WriteLine($"→ Database connection configured for host: {host}");
+                
+                // Test DNS resolution
+                try
+                {
+                    var hostEntry = System.Net.Dns.GetHostEntry(host);
+                    if (hostEntry.AddressList.Length > 0)
+                    {
+                        var ipv4Addresses = hostEntry.AddressList
+                            .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                            .Select(a => a.ToString())
+                            .ToList();
+                        var ipv6Addresses = hostEntry.AddressList
+                            .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                            .Select(a => a.ToString())
+                            .ToList();
+                        
+                        Console.WriteLine($"✓ DNS resolution successful.");
+                        if (ipv4Addresses.Any())
+                        {
+                            Console.WriteLine($"  → IPv4 addresses: {string.Join(", ", ipv4Addresses)}");
+                        }
+                        if (ipv6Addresses.Any())
+                        {
+                            Console.WriteLine($"  → IPv6 addresses: {string.Join(", ", ipv6Addresses)}");
+                        }
+                        
+                        if (!ipv4Addresses.Any() && ipv6Addresses.Any())
+                        {
+                            Console.WriteLine($"⚠ Warning: Only IPv6 address found. If connection fails, try:");
+                            Console.WriteLine($"    1. Use Supabase Connection Pooling (pooler.supabase.com)");
+                            Console.WriteLine($"    2. Check if your network/firewall supports IPv6");
+                            Console.WriteLine($"    3. Verify IPv6 connectivity: ping6 {ipv6Addresses.First()}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"⚠ DNS resolution returned no IP addresses for host: {host}");
+                    }
+                }
+                catch (System.Net.Sockets.SocketException ex)
+                {
+                    Console.WriteLine($"✗ DNS resolution failed for host: {host}");
+                    Console.WriteLine($"  → Error: {ex.Message}");
+                    Console.WriteLine($"  → Possible causes:");
+                    Console.WriteLine($"    1. Hostname is incorrect - verify in Supabase dashboard");
+                    Console.WriteLine($"    2. Supabase project may be paused or deleted");
+                    Console.WriteLine($"    3. Network/DNS server cannot resolve the hostname");
+                    Console.WriteLine($"    4. Firewall blocking DNS queries");
+                    Console.WriteLine($"  → To fix:");
+                    Console.WriteLine($"    - Go to Supabase Dashboard → Settings → Database");
+                    Console.WriteLine($"    - Copy the exact connection string from 'Connection string' section");
+                    Console.WriteLine($"    - Verify the hostname matches exactly");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠ Could not test DNS resolution: {ex.Message}");
+                }
             }
         }
 
