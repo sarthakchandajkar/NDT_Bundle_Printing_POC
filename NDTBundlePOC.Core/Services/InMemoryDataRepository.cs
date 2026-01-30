@@ -22,7 +22,7 @@ namespace NDTBundlePOC.Core.Services
                 NDTBundleFormationChart_ID = 1,
                 Mill_ID = 1,
                 PO_Plan_ID = null, // Default for all POs
-                NDT_PcsPerBundle = 10,
+                NDT_PcsPerBundle = 5, // Reduced from 10 to 5 for more frequent bundle printing
                 IsActive = true
             });
 
@@ -31,7 +31,7 @@ namespace NDTBundlePOC.Core.Services
                 NDTBundleFormationChart_ID = 2,
                 Mill_ID = 1,
                 PO_Plan_ID = 1, // Specific PO
-                NDT_PcsPerBundle = 15,
+                NDT_PcsPerBundle = 5, // Reduced from 15 to 5 for more frequent bundle printing
                 IsActive = true
             });
 

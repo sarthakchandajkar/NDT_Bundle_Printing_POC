@@ -32,6 +32,7 @@ namespace NDTBundlePOC.Core.Services
         private int _previousNDTCuts = 0;
         private bool _previousOKBundleDone = false;
         private bool _previousNDTBundleDone = false;
+        private bool _isInitialized = false; // Track if service has completed first initialization
 
         public PLCPollingService(
             IPLCService plcService,
@@ -144,8 +145,19 @@ namespace NDTBundlePOC.Core.Services
 
                         // ALWAYS check for completed bundles and print (not just when new cuts are detected)
                         // This ensures bundles are printed even if PLC counter doesn't change
-                        CheckAndPrintOKBundles();
-                        CheckAndPrintNDTBundles();
+                        // Skip printing on very first cycle to avoid printing any stale bundles from repository initialization
+                        if (_isInitialized)
+                        {
+                            CheckAndPrintOKBundles();
+                            CheckAndPrintNDTBundles();
+                        }
+                        else
+                        {
+                            // Mark as initialized after first cycle completes
+                            // This prevents printing any bundles that might exist in repository on startup
+                            _isInitialized = true;
+                            _logger?.LogInformation("Service initialization complete. Skipped first cycle bundle printing to avoid stale bundles. Will print new bundles from next cycle.");
+                        }
 
                         // Check OK Bundle Done signal
                         bool okBundleDone = CheckOKBundleDone();

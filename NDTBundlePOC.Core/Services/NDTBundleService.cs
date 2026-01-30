@@ -26,10 +26,9 @@ namespace NDTBundlePOC.Core.Services
             if (poPlan == null) return;
 
             // Get NDT Pcs per bundle from chart
-            // For testing: Print a tag for every 5 NDT pipes counted
-            // TODO: Change back to production value (10 or from formation chart) after testing
+            // Bundle size reduced to 5 pipes per bundle for more frequent bundle printing
             var formationChart = _repository.GetNDTFormationChart(millId, poPlan.PO_Plan_ID);
-            int requiredNDTPcs = formationChart?.NDT_PcsPerBundle ?? 5; // Set to 5 for testing - print tag for every 5 NDT pipes
+            int requiredNDTPcs = formationChart?.NDT_PcsPerBundle ?? 5; // Default to 5 pipes per bundle
 
             int remainingCuts = newNDTCuts;
 

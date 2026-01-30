@@ -52,7 +52,7 @@ namespace NDTBundlePOC.Core.Services
     public class OKBundleService : IOKBundleService
     {
         private readonly IDataRepository _repository;
-        private const int DEFAULT_OK_PCS_PER_BUNDLE = 10; // Default OK pieces per bundle
+        private const int DEFAULT_OK_PCS_PER_BUNDLE = 5; // Default OK pieces per bundle (reduced from 10 for more frequent bundle printing)
         
         // In-memory storage for OK bundles (similar to NDT bundles)
         private List<OKBundle> _okBundles = new List<OKBundle>();
