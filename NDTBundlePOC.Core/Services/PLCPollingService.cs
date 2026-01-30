@@ -78,9 +78,6 @@ namespace NDTBundlePOC.Core.Services
                             _activityService?.LogActivity("OK", newOKCuts, currentOKCuts, _previousNDTCuts, "PLC");
                             
                             _okBundleService.ProcessOKCuts(_millId, newOKCuts);
-                            
-                            // Check for completed OK bundles and print
-                            CheckAndPrintOKBundles();
                         }
 
                         // Read NDT cuts from PLC
@@ -96,10 +93,12 @@ namespace NDTBundlePOC.Core.Services
                             _activityService?.LogActivity("NDT", newNDTCuts, _previousOKCuts, currentNDTCuts, "PLC");
                             
                             _ndtBundleService.ProcessNDTCuts(_millId, newNDTCuts);
-                            
-                            // Check for completed NDT bundles and print
-                            CheckAndPrintNDTBundles();
                         }
+
+                        // ALWAYS check for completed bundles and print (not just when new cuts are detected)
+                        // This ensures bundles are printed even if PLC counter doesn't change
+                        CheckAndPrintOKBundles();
+                        CheckAndPrintNDTBundles();
 
                         // Check OK Bundle Done signal
                         bool okBundleDone = CheckOKBundleDone();
@@ -215,15 +214,29 @@ namespace NDTBundlePOC.Core.Services
             try
             {
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
+                if (readyBundles.Count > 0)
+                {
+                    _logger?.LogInformation($"Found {readyBundles.Count} OK bundle(s) ready for printing");
+                }
+                
                 foreach (var bundle in readyBundles)
                 {
-                    _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No}");
-                    _okBundleService.PrintBundleTag(
+                    _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (ID: {bundle.OKBundle_ID}, Pcs: {bundle.OK_Pcs})");
+                    bool printed = _okBundleService.PrintBundleTag(
                         bundle.OKBundle_ID,
                         _printerService,
                         _excelService,
                         _plcService
                     );
+                    
+                    if (printed)
+                    {
+                        _logger?.LogInformation($"✓ Successfully printed OK bundle: {bundle.Bundle_No}");
+                    }
+                    else
+                    {
+                        _logger?.LogWarning($"✗ Failed to print OK bundle: {bundle.Bundle_No}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -237,15 +250,29 @@ namespace NDTBundlePOC.Core.Services
             try
             {
                 var readyBundles = _ndtBundleService.GetBundlesReadyForPrinting();
+                if (readyBundles.Count > 0)
+                {
+                    _logger?.LogInformation($"Found {readyBundles.Count} NDT bundle(s) ready for printing");
+                }
+                
                 foreach (var bundle in readyBundles)
                 {
-                    _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No}");
-                    _ndtBundleService.PrintBundleTag(
+                    _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No} (ID: {bundle.NDTBundle_ID}, Pcs: {bundle.NDT_Pcs})");
+                    bool printed = _ndtBundleService.PrintBundleTag(
                         bundle.NDTBundle_ID,
                         _printerService,
                         _excelService,
                         _plcService
                     );
+                    
+                    if (printed)
+                    {
+                        _logger?.LogInformation($"✓ Successfully printed NDT bundle: {bundle.Bundle_No}");
+                    }
+                    else
+                    {
+                        _logger?.LogWarning($"✗ Failed to print NDT bundle: {bundle.Bundle_No}");
+                    }
                 }
             }
             catch (Exception ex)

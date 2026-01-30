@@ -53,6 +53,11 @@ namespace NDTBundlePOC.Core.Services
     {
         private readonly IDataRepository _repository;
         private const int DEFAULT_OK_PCS_PER_BUNDLE = 10; // Default OK pieces per bundle
+        
+        // In-memory storage for OK bundles (similar to NDT bundles)
+        private List<OKBundle> _okBundles = new List<OKBundle>();
+        private int _nextOKBundleId = 1;
+        private readonly object _lock = new object();
 
         public OKBundleService(IDataRepository repository)
         {
@@ -123,6 +128,16 @@ namespace NDTBundlePOC.Core.Services
                 if (newBundle != null)
                 {
                     newBundle.OK_Pcs = remainingCuts;
+                    
+                    // Check if bundle is complete immediately
+                    if (newBundle.OK_Pcs >= requiredOKPcs)
+                    {
+                        newBundle.Status = 2; // Completed
+                        newBundle.BundleEndTime = DateTime.Now;
+                        newBundle.IsFullBundle = true;
+                        Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed with {newBundle.OK_Pcs} pipes. Ready for printing.");
+                    }
+                    
                     UpdateOKBundle(newBundle);
                 }
             }
@@ -138,15 +153,32 @@ namespace NDTBundlePOC.Core.Services
 
         private List<OKBundle> GetOKBundles()
         {
-            // In production, this would query the database
-            // For POC, return empty list (OK bundles would be stored in database)
-            return new List<OKBundle>();
+            lock (_lock)
+            {
+                return _okBundles.ToList();
+            }
         }
 
         private void UpdateOKBundle(OKBundle bundle)
         {
-            // In production, this would update the database
-            // For POC, this is a placeholder
+            lock (_lock)
+            {
+                var existing = _okBundles.FirstOrDefault(b => b.OKBundle_ID == bundle.OKBundle_ID);
+                if (existing != null)
+                {
+                    var index = _okBundles.IndexOf(existing);
+                    _okBundles[index] = bundle;
+                }
+                else
+                {
+                    // If bundle doesn't exist, add it (for newly created bundles)
+                    if (bundle.OKBundle_ID == 0)
+                    {
+                        bundle.OKBundle_ID = _nextOKBundleId++;
+                    }
+                    _okBundles.Add(bundle);
+                }
+            }
         }
 
         private string GenerateOKBatchNumber(int poPlanId, string previousBatchNo)
@@ -179,11 +211,45 @@ namespace NDTBundlePOC.Core.Services
             var poPlan = _repository.GetPOPlan(poPlanId);
             if (poPlan == null) return "";
 
-            // Generate bundle number
-            string bundleNo = poPlan.PO_No + "OK001"; // Simplified for POC
+            // Generate bundle number based on existing bundles for this PO
+            var existingBundles = GetOKBundles().Where(b => b.PO_Plan_ID == poPlanId).ToList();
+            int bundleNumber = 1;
+            
+            if (existingBundles.Any())
+            {
+                var lastBundle = existingBundles.OrderByDescending(b => b.BundleStartTime).First();
+                // Extract number from bundle number format: PO_NoOK001
+                if (lastBundle.Bundle_No != null && lastBundle.Bundle_No.Contains("OK"))
+                {
+                    string numPart = lastBundle.Bundle_No.Replace(poPlan.PO_No + "OK", "");
+                    if (int.TryParse(numPart, out int lastNum))
+                    {
+                        bundleNumber = lastNum + 1;
+                    }
+                }
+            }
+            
+            string bundleNo = $"{poPlan.PO_No}OK{bundleNumber:D3}";
 
-            // In production, this would insert into database
-            // For POC, this is a placeholder
+            // Create and store the new bundle
+            OKBundle newBundle;
+            lock (_lock)
+            {
+                newBundle = new OKBundle
+                {
+                    OKBundle_ID = _nextOKBundleId++,
+                    PO_Plan_ID = poPlanId,
+                    Slit_ID = slitId,
+                    Bundle_No = bundleNo,
+                    OK_Pcs = 0,
+                    Status = 1, // Active
+                    IsFullBundle = false,
+                    BundleStartTime = DateTime.Now,
+                    Batch_No = batchNo
+                };
+                _okBundles.Add(newBundle);
+            }
+
             return bundleNo;
         }
 
