@@ -39,25 +39,29 @@ namespace NDTBundlePOC.Core.Services
             _poPlans.Add(new POPlan
             {
                 PO_Plan_ID = 1,
+                PLC_POID = 1,
                 PO_No = "PO_001",
                 Shop_ID = 1,
-                Pipe_Grade = "GRADE_A",
+                Pipe_Type = "Type_A",
                 Pipe_Size = "2\"",
-                Pipe_Thick = 2.5m,
+                PcsPerBundle = 10,
                 Pipe_Len = 6.0m,
-                Status = 2 // In Progress
+                PipeWt_per_mtr = 2.5m,
+                SAP_Type = "SAP_A"
             });
 
             _poPlans.Add(new POPlan
             {
                 PO_Plan_ID = 2,
+                PLC_POID = 2,
                 PO_No = "PO_002",
                 Shop_ID = 1,
-                Pipe_Grade = "GRADE_B",
+                Pipe_Type = "Type_B",
                 Pipe_Size = "3\"",
-                Pipe_Thick = 3.0m,
+                PcsPerBundle = 15,
                 Pipe_Len = 8.0m,
-                Status = 2
+                PipeWt_per_mtr = 3.0m,
+                SAP_Type = "SAP_B"
             });
 
             // Initialize Slits
@@ -116,6 +120,34 @@ namespace NDTBundlePOC.Core.Services
             _poPlans.FirstOrDefault(p => p.PO_Plan_ID == poPlanId);
         
         public List<POPlan> GetPOPlans() => _poPlans.ToList();
+
+        public void AddPOPlan(POPlan poPlan)
+        {
+            if (poPlan.PO_Plan_ID == 0)
+            {
+                poPlan.PO_Plan_ID = _poPlans.Count > 0 ? _poPlans.Max(p => p.PO_Plan_ID) + 1 : 1;
+            }
+            _poPlans.Add(poPlan);
+        }
+
+        public void UpdatePOPlan(POPlan poPlan)
+        {
+            var existing = _poPlans.FirstOrDefault(p => p.PO_Plan_ID == poPlan.PO_Plan_ID);
+            if (existing != null)
+            {
+                var index = _poPlans.IndexOf(existing);
+                _poPlans[index] = poPlan;
+            }
+        }
+
+        public void DeletePOPlan(int poPlanId)
+        {
+            var existing = _poPlans.FirstOrDefault(p => p.PO_Plan_ID == poPlanId);
+            if (existing != null)
+            {
+                _poPlans.Remove(existing);
+            }
+        }
         
         public Slit GetActiveSlit(int poPlanId)
         {

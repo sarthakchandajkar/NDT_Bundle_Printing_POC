@@ -732,6 +732,28 @@
                 </div>
             </div>
 
+            <!-- OK Bundle Statistics Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span>OK Bundle Statistics</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-label">Total in Bundles:</span>
+                        <span class="monitor-value" id="totalOKInBundles">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Bundles Created:</span>
+                        <span class="monitor-value" id="okBundlesCreated">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">Tags Printed:</span>
+                        <span class="monitor-value" id="okTagsPrinted">0</span>
+                    </div>
+                    <div class="monitor-label">Threshold: 5 pipes per bundle</div>
+                </div>
+            </div>
+
             <!-- Bundle Status Card -->
             <div class="monitor-card">
                 <div class="monitor-card-header">
@@ -1400,6 +1422,13 @@
                 document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated || 0;
                 document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted || 0;
                 
+                // Update OK Bundle Statistics
+                if (data.okCounts) {
+                    document.getElementById('totalOKInBundles').textContent = data.okCounts.totalPipes || 0;
+                    document.getElementById('okBundlesCreated').textContent = data.okCounts.bundlesCreated || 0;
+                    document.getElementById('okTagsPrinted').textContent = data.okCounts.tagsPrinted || 0;
+                }
+                
                 // Update Bundle Status
                 document.getElementById('activeBundles').textContent = data.bundleStatus.active || 0;
                 document.getElementById('readyBundles').textContent = data.bundleStatus.ready || 0;
@@ -1414,6 +1443,7 @@
                     checkPLCStatus(),
                     checkPrinterStatus(),
                     updateNDTCounts(),
+                    updateOKCounts(),
                     updateBundleStatus()
                 ]);
             }
@@ -1554,6 +1584,24 @@
                 updateBundleStatus();
             } catch (error) {
                 console.error('Error updating NDT counts:', error);
+            }
+        }
+
+        async function updateOKCounts() {
+            try {
+                // Get OK bundles data
+                const bundlesResponse = await fetch('/api/ok-bundles');
+                const bundles = await bundlesResponse.json();
+                
+                // Calculate statistics - handle both camelCase and snake_case property names
+                const totalOKPcs = bundles.reduce((sum, b) => sum + (b.ok_Pcs || b.okPcs || 0), 0);
+                const printedCount = bundles.filter(b => (b.status === 3 || b.Status === 3)).length;
+                
+                document.getElementById('totalOKInBundles').textContent = totalOKPcs;
+                document.getElementById('okBundlesCreated').textContent = bundles.length;
+                document.getElementById('okTagsPrinted').textContent = printedCount;
+            } catch (error) {
+                console.error('Error updating OK counts:', error);
             }
         }
 

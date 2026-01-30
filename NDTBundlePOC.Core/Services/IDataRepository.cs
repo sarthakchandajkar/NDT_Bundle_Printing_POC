@@ -18,6 +18,9 @@ namespace NDTBundlePOC.Core.Services
         // PO Plans
         POPlan GetPOPlan(int poPlanId);
         List<POPlan> GetPOPlans();
+        void AddPOPlan(POPlan poPlan);
+        void UpdatePOPlan(POPlan poPlan);
+        void DeletePOPlan(int poPlanId);
         
         // Slits
         Slit GetActiveSlit(int poPlanId);

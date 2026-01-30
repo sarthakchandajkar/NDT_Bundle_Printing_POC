@@ -17,6 +17,8 @@ namespace NDTBundlePOC.UI
         private readonly IPrinterService _printerService;
         private readonly ExcelExportService _excelService;
         private readonly IDataRepository _repository;
+        private readonly IPLCService _plcService;
+        private readonly PLCPollingController _pollingController;
 
         // Header Controls
         private Panel _headerPanel = null!;
@@ -40,6 +42,8 @@ namespace NDTBundlePOC.UI
         private List<Button> _shopLineButtons = new List<Button>();
         private Button _btnPrintBundles = null!;
         private Button _btnViewLog = null!;
+        private Button _btnManagePOPlans = null!;
+        private Button _btnStartStopPolling = null!;
         private TextBox _txtSearch = null!;
 
         // Grid Controls
@@ -55,17 +59,20 @@ namespace NDTBundlePOC.UI
         private DataTable _bundlesTable = null!;
         private List<NDTBundle> _allBundles = new List<NDTBundle>();
 
-        public MainForm(INDTBundleService bundleService, IPrinterService printerService, ExcelExportService excelService, IDataRepository repository)
+        public MainForm(INDTBundleService bundleService, IPrinterService printerService, ExcelExportService excelService, IDataRepository repository, IPLCService plcService = null, PLCPollingController pollingController = null)
         {
             _bundleService = bundleService;
             _printerService = printerService;
             _excelService = excelService;
             _repository = repository;
+            _plcService = plcService;
+            _pollingController = pollingController;
             
             InitializeComponent();
             InitializeData();
             LoadBundles();
             StartDateTimeTimer();
+            InitializePLCPolling();
         }
 
         private void InitializeComponent()
@@ -282,27 +289,50 @@ namespace NDTBundlePOC.UI
             yPos += 30;
 
             // Row 5: Action Buttons (Right-aligned)
-            _btnPrintBundles = new Button
+            // Position buttons from right to left
+            int buttonSpacing = 5;
+            int currentX = 0; // Start from right edge
+            
+            _btnManagePOPlans = new Button
             {
-                Text = "Print Bundles",
+                Text = "Manage PO Plans",
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(0, yPos - 2),
-                Width = 120,
+                Location = new Point(currentX, yPos - 2),
+                Width = 130,
                 Height = 22,
                 Font = new Font("Segoe UI", 8F),
-                BackColor = Color.FromArgb(0, 120, 215),
+                BackColor = Color.FromArgb(40, 167, 69),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
-            _btnPrintBundles.FlatAppearance.BorderSize = 0;
-            _btnPrintBundles.Click += BtnPrintBundles_Click;
-            _filterPanel.Controls.Add(_btnPrintBundles);
+            _btnManagePOPlans.FlatAppearance.BorderSize = 0;
+            _btnManagePOPlans.Click += BtnManagePOPlans_Click;
+            _filterPanel.Controls.Add(_btnManagePOPlans);
+            currentX += _btnManagePOPlans.Width + buttonSpacing;
+
+            _btnStartStopPolling = new Button
+            {
+                Text = "Start PLC Polling",
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Location = new Point(currentX, yPos - 2),
+                Width = 130,
+                Height = 22,
+                Font = new Font("Segoe UI", 8F),
+                BackColor = Color.FromArgb(40, 167, 69),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Enabled = _pollingController != null
+            };
+            _btnStartStopPolling.FlatAppearance.BorderSize = 0;
+            _btnStartStopPolling.Click += BtnStartStopPolling_Click;
+            _filterPanel.Controls.Add(_btnStartStopPolling);
+            currentX += _btnStartStopPolling.Width + buttonSpacing;
 
             _btnViewLog = new Button
             {
                 Text = "View Log",
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Location = new Point(0, yPos - 2),
+                Location = new Point(currentX, yPos - 2),
                 Width = 90,
                 Height = 22,
                 Font = new Font("Segoe UI", 8F),
@@ -313,6 +343,23 @@ namespace NDTBundlePOC.UI
             _btnViewLog.FlatAppearance.BorderSize = 0;
             _btnViewLog.Click += (s, e) => MessageBox.Show("View Log functionality not implemented", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             _filterPanel.Controls.Add(_btnViewLog);
+            currentX += _btnViewLog.Width + buttonSpacing;
+
+            _btnPrintBundles = new Button
+            {
+                Text = "Print Bundles",
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Location = new Point(currentX, yPos - 2),
+                Width = 120,
+                Height = 22,
+                Font = new Font("Segoe UI", 8F),
+                BackColor = Color.FromArgb(0, 120, 215),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            _btnPrintBundles.FlatAppearance.BorderSize = 0;
+            _btnPrintBundles.Click += BtnPrintBundles_Click;
+            _filterPanel.Controls.Add(_btnPrintBundles);
 
             // Search Box
             _txtSearch = new TextBox
@@ -455,9 +502,9 @@ namespace NDTBundlePOC.UI
             if (_txtPO != null)
                 _txtPO.DataSource = poPlans.Select(p => p.PO_No).Distinct().ToList();
 
-            var grades = poPlans.Select(p => p.Pipe_Grade).Distinct().Where(g => !string.IsNullOrEmpty(g)).ToList();
+            var pipeTypes = poPlans.Select(p => p.Pipe_Type).Distinct().Where(t => !string.IsNullOrEmpty(t)).ToList();
             if (_txtGrade != null)
-                _txtGrade.DataSource = grades;
+                _txtGrade.DataSource = pipeTypes;
             if (_txtSize != null)
                 _txtSize.DataSource = poPlans.Select(p => p.Pipe_Size).Distinct().Where(s => !string.IsNullOrEmpty(s)).ToList();
 
@@ -799,6 +846,145 @@ namespace NDTBundlePOC.UI
                             $"Is Full Bundle: {bundle.IsFullBundle}";
 
             MessageBox.Show(details, "Bundle Details", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void InitializePLCPolling()
+        {
+            if (_pollingController == null)
+            {
+                if (_btnStartStopPolling != null)
+                {
+                    _btnStartStopPolling.Enabled = false;
+                    _btnStartStopPolling.Text = "PLC Not Available";
+                    _btnStartStopPolling.BackColor = Color.FromArgb(108, 117, 125);
+                }
+                return;
+            }
+
+            // Ensure polling is stopped on startup (explicitly stop if somehow started)
+            if (_pollingController.IsPolling)
+            {
+                _pollingController.Stop();
+            }
+
+            // Subscribe to polling status changes
+            _pollingController.StatusChanged += (s, message) =>
+            {
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() => _lblStatus.Text = message));
+                }
+                else
+                {
+                    _lblStatus.Text = message;
+                }
+            };
+
+            // Subscribe to cuts changed events
+            _pollingController.OKCutsChanged += (s, count) =>
+            {
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() => LoadBundles()));
+                }
+                else
+                {
+                    LoadBundles();
+                }
+            };
+
+            _pollingController.NDTCutsChanged += (s, count) =>
+            {
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() => LoadBundles()));
+                }
+                else
+                {
+                    LoadBundles();
+                }
+            };
+
+            // Explicitly set button to "Start" state (polling is off)
+            UpdatePollingButtonState();
+        }
+
+        private void BtnStartStopPolling_Click(object? sender, EventArgs e)
+        {
+            if (_pollingController == null)
+            {
+                MessageBox.Show("PLC polling is not available. Please check PLC configuration.", 
+                    "PLC Not Available", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                if (_pollingController.IsPolling)
+                {
+                    _pollingController.Stop();
+                }
+                else
+                {
+                    // Check if PLC is connected
+                    if (_plcService == null || !_plcService.IsConnected)
+                    {
+                        // Try to connect to PLC
+                        var plcIp = System.Configuration.ConfigurationManager.AppSettings["PLC:IPAddress"];
+                        if (string.IsNullOrEmpty(plcIp)) plcIp = "192.168.0.74";
+                        
+                        var rackStr = System.Configuration.ConfigurationManager.AppSettings["PLC:Rack"];
+                        var rack = int.TryParse(rackStr, out int r) ? r : 0;
+                        
+                        var slotStr = System.Configuration.ConfigurationManager.AppSettings["PLC:Slot"];
+                        var slot = int.TryParse(slotStr, out int s) ? s : 1;
+
+                        var connected = _plcService.Connect(plcIp, rack, slot);
+                        if (!connected)
+                        {
+                            MessageBox.Show($"Failed to connect to PLC at {plcIp}.\n\nPlease check:\n- PLC IP address is correct\n- PLC is powered on and accessible\n- Network connection is active", 
+                                "PLC Connection Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                    }
+
+                    _pollingController.Start();
+                }
+
+                UpdatePollingButtonState();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error controlling PLC polling: {ex.Message}", 
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdatePollingButtonState()
+        {
+            if (_btnStartStopPolling == null || _pollingController == null)
+                return;
+
+            if (_pollingController.IsPolling)
+            {
+                _btnStartStopPolling.Text = "Stop PLC Polling";
+                _btnStartStopPolling.BackColor = Color.FromArgb(220, 53, 69); // Red for stop
+            }
+            else
+            {
+                _btnStartStopPolling.Text = "Start PLC Polling";
+                _btnStartStopPolling.BackColor = Color.FromArgb(40, 167, 69); // Green for start
+            }
+        }
+
+        private void BtnManagePOPlans_Click(object? sender, EventArgs e)
+        {
+            using (var form = new POPlanManagementForm(_repository))
+            {
+                form.ShowDialog();
+                // Refresh data after closing the management form
+                InitializeData();
+            }
         }
 
         private void ExportGridToExcel()

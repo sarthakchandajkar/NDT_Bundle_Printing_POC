@@ -69,14 +69,8 @@ namespace NDTBundlePOC.Core.Services
                 }
                 else
                 {
-                        // Bundle not complete yet, but check if PO ended
-                    if (poPlan.Status >= 3) // PO completed
-                    {
-                            currentBundle.Status = 2;
-                            currentBundle.BundleEndTime = DateTime.Now;
-                            currentBundle.IsFullBundle = false;
-                            _repository.UpdateNDTBundle(currentBundle);
-                        }
+                        // Bundle not complete yet - continue processing
+                        // Note: Status field no longer exists in PO_Plan table
                         // No more cuts to process
                         break;
                 }
@@ -238,7 +232,7 @@ namespace NDTBundlePOC.Core.Services
                 BatchNo = bundle.Batch_No,
                 NDT_Pcs = bundle.NDT_Pcs,
                 PO_No = poPlan.PO_No,
-                Pipe_Grade = poPlan.Pipe_Grade,
+                Pipe_Grade = poPlan.Pipe_Type, // Map Pipe_Type to Pipe_Grade for backward compatibility
                 Pipe_Size = poPlan.Pipe_Size,
                 Pipe_Len = poPlan.Pipe_Len,
                 BundleStartTime = bundle.BundleStartTime,

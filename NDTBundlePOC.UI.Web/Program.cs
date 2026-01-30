@@ -200,7 +200,8 @@ app.MapGet("/api/bundles", (INDTBundleService bundleService) =>
 
 app.MapGet("/api/ok-bundles", (IOKBundleService okBundleService) =>
 {
-    var bundles = okBundleService.GetBundlesReadyForPrinting();
+    // Return all OK bundles for UI display (not just ready for printing)
+    var bundles = okBundleService.GetAllOKBundles();
     return Results.Ok(bundles);
 });
 
@@ -388,12 +389,14 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
 });
 
 // System status endpoint
-app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IPipeCountingActivityServiceExtended activityService) =>
+app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IOKBundleService okBundleService, IPipeCountingActivityServiceExtended activityService) =>
 {
     try
     {
-        var bundles = ndtBundleService.GetAllNDTBundles();
-        var readyBundles = ndtBundleService.GetBundlesReadyForPrinting();
+        var ndtBundles = ndtBundleService.GetAllNDTBundles();
+        var ndtReadyBundles = ndtBundleService.GetBundlesReadyForPrinting();
+        var okBundles = okBundleService.GetAllOKBundles();
+        var okReadyBundles = okBundleService.GetBundlesReadyForPrinting();
         var (okCuts, ndtCuts) = activityService?.GetCurrentCounts() ?? (0, 0);
         
         return Results.Ok(new
@@ -418,15 +421,21 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
             },
             ndtCounts = new
             {
-                totalPipes = bundles.Sum(b => b.NDT_Pcs),
-                bundlesCreated = bundles.Count,
-                tagsPrinted = bundles.Count(b => b.Status == 3)
+                totalPipes = ndtBundles.Sum(b => b.NDT_Pcs),
+                bundlesCreated = ndtBundles.Count,
+                tagsPrinted = ndtBundles.Count(b => b.Status == 3)
+            },
+            okCounts = new
+            {
+                totalPipes = okBundles.Sum(b => b.OK_Pcs),
+                bundlesCreated = okBundles.Count,
+                tagsPrinted = okBundles.Count(b => b.Status == 3)
             },
             bundleStatus = new
             {
-                active = bundles.Count(b => b.Status == 1),
-                ready = readyBundles.Count,
-                printed = bundles.Count(b => b.Status == 3)
+                active = ndtBundles.Count(b => b.Status == 1) + okBundles.Count(b => b.Status == 1),
+                ready = ndtReadyBundles.Count + okReadyBundles.Count,
+                printed = ndtBundles.Count(b => b.Status == 3) + okBundles.Count(b => b.Status == 3)
             }
         });
     }

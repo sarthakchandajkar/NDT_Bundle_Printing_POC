@@ -14,6 +14,7 @@ namespace NDTBundlePOC.Core.Services
     {
         void ProcessOKCuts(int millId, int newOKCuts);
         List<OKBundle> GetBundlesReadyForPrinting();
+        List<OKBundle> GetAllOKBundles();
         void MarkBundleAsPrinted(int bundleId);
         OKBundlePrintData GetBundlePrintData(int bundleId);
         bool PrintBundleTag(int bundleId, IPrinterService printerService, ExcelExportService excelService, IPLCService plcService = null);
@@ -117,14 +118,8 @@ namespace NDTBundlePOC.Core.Services
                     }
                     else
                     {
-                        // Bundle not complete yet, but check if PO ended
-                        if (poPlan.Status >= 3) // PO completed
-                        {
-                            currentBundle.Status = 2;
-                            currentBundle.BundleEndTime = DateTime.Now;
-                            currentBundle.IsFullBundle = false;
-                            UpdateOKBundle(currentBundle);
-                        }
+                        // Bundle not complete yet - continue processing
+                        // Note: Status field no longer exists in PO_Plan table
                         // No more cuts to process
                         break;
                     }
@@ -281,6 +276,13 @@ namespace NDTBundlePOC.Core.Services
                 .ToList();
         }
 
+        public List<OKBundle> GetAllOKBundles()
+        {
+            return GetOKBundles()
+                .OrderByDescending(b => b.BundleStartTime)
+                .ToList();
+        }
+
         public void MarkBundleAsPrinted(int bundleId)
         {
             var bundle = GetOKBundles().FirstOrDefault(b => b.OKBundle_ID == bundleId);
@@ -306,7 +308,7 @@ namespace NDTBundlePOC.Core.Services
                 BatchNo = bundle.Batch_No,
                 OK_Pcs = bundle.OK_Pcs,
                 PO_No = poPlan.PO_No,
-                Pipe_Grade = poPlan.Pipe_Grade,
+                Pipe_Grade = poPlan.Pipe_Type, // Map Pipe_Type to Pipe_Grade for backward compatibility
                 Pipe_Size = poPlan.Pipe_Size,
                 Pipe_Len = poPlan.Pipe_Len,
                 BundleStartTime = bundle.BundleStartTime,
