@@ -255,11 +255,29 @@ app.MapGet("/api/bundles", (INDTBundleService bundleService) =>
     {
         // Return all bundles for UI display (not just ready for printing)
         var bundles = bundleService.GetAllNDTBundles();
+        if (bundles == null)
+        {
+            Console.WriteLine("⚠ GetAllNDTBundles returned null - returning empty list");
+            return Results.Ok(new List<NDTBundle>());
+        }
         return Results.Ok(bundles);
+    }
+    catch (System.Net.Sockets.SocketException ex)
+    {
+        Console.WriteLine($"✗ Network error in /api/bundles endpoint: {ex.Message}");
+        Console.WriteLine($"  → Database connection failed - returning empty list");
+        return Results.Ok(new List<NDTBundle>());
+    }
+    catch (Npgsql.NpgsqlException ex)
+    {
+        Console.WriteLine($"✗ Database error in /api/bundles endpoint: {ex.Message}");
+        Console.WriteLine($"  → Database connection failed - returning empty list");
+        return Results.Ok(new List<NDTBundle>());
     }
     catch (Exception ex)
     {
         Console.WriteLine($"✗ Error in /api/bundles endpoint: {ex.Message}");
+        Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
         // Return empty list instead of error to allow UI to continue
         return Results.Ok(new List<NDTBundle>());
     }

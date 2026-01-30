@@ -38,6 +38,35 @@ namespace NDTBundlePOC.Core.Services
             return new NpgsqlConnection(_connectionString);
         }
 
+        /// <summary>
+        /// Wrapper method to safely execute database operations with error handling
+        /// </summary>
+        private T SafeExecute<T>(Func<T> operation, T defaultValue, string operationName)
+        {
+            try
+            {
+                return operation();
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                Console.WriteLine($"✗ Network error in {operationName}: {ex.Message}");
+                Console.WriteLine($"  → Check your internet connection");
+                Console.WriteLine($"  → Verify Supabase hostname is correct: {ExtractHostFromConnectionString()}");
+                return defaultValue;
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"✗ Database error in {operationName}: {ex.Message}");
+                Console.WriteLine($"  → Check your connection string in appsettings.json");
+                return defaultValue;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error in {operationName}: {ex.Message}");
+                return defaultValue;
+            }
+        }
+
         // NDT Bundles
         public List<NDTBundle> GetNDTBundles()
         {
