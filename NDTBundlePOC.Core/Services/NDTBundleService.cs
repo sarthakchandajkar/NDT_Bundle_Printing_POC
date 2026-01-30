@@ -308,16 +308,34 @@ namespace NDTBundlePOC.Core.Services
 
         public List<NDTBundle> GetBundlesReadyForPrinting()
         {
-            return _repository.GetNDTBundles()
-                .Where(b => b.Status == 2) // Completed but not printed
-                .ToList();
+            try
+            {
+                return _repository.GetNDTBundles()
+                    .Where(b => b.Status == 2) // Completed but not printed
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error in GetBundlesReadyForPrinting: {ex.Message}");
+                // Return empty list to prevent polling service from crashing
+                return new List<NDTBundle>();
+            }
         }
 
         public List<NDTBundle> GetAllNDTBundles()
         {
-            return _repository.GetNDTBundles()
-                .OrderByDescending(b => b.BundleStartTime)
-                .ToList();
+            try
+            {
+                return _repository.GetNDTBundles()
+                    .OrderByDescending(b => b.BundleStartTime)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error in GetAllNDTBundles: {ex.Message}");
+                // Return empty list to prevent UI from crashing
+                return new List<NDTBundle>();
+            }
         }
 
         public void MarkBundleAsPrinted(int bundleId)

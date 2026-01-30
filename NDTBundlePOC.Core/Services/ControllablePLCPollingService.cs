@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace NDTBundlePOC.Core.Services
 {
@@ -421,6 +422,12 @@ namespace NDTBundlePOC.Core.Services
             try
             {
                 var readyBundles = _ndtBundleService.GetBundlesReadyForPrinting();
+                if (readyBundles == null)
+                {
+                    _logger?.LogWarning("GetBundlesReadyForPrinting returned null - database may be unavailable");
+                    return;
+                }
+                
                 if (readyBundles.Count > 0)
                 {
                     _logger?.LogInformation($"Found {readyBundles.Count} NDT bundle(s) ready for printing");
@@ -428,27 +435,43 @@ namespace NDTBundlePOC.Core.Services
                 
                 foreach (var bundle in readyBundles)
                 {
-                    _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No} (ID: {bundle.NDTBundle_ID}, Pcs: {bundle.NDT_Pcs}, Status: {bundle.Status})");
-                    bool printed = _ndtBundleService.PrintBundleTag(
-                        bundle.NDTBundle_ID,
-                        _printerService,
-                        _excelService,
-                        _plcService
-                    );
-                    
-                    if (printed)
+                    try
                     {
-                        _logger?.LogInformation($"✓ Successfully printed NDT bundle: {bundle.Bundle_No}");
+                        _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No} (ID: {bundle.NDTBundle_ID}, Pcs: {bundle.NDT_Pcs}, Status: {bundle.Status})");
+                        bool printed = _ndtBundleService.PrintBundleTag(
+                            bundle.NDTBundle_ID,
+                            _printerService,
+                            _excelService,
+                            _plcService
+                        );
+                        
+                        if (printed)
+                        {
+                            _logger?.LogInformation($"✓ Successfully printed NDT bundle: {bundle.Bundle_No}");
+                        }
+                        else
+                        {
+                            _logger?.LogWarning($"✗ Failed to print NDT bundle: {bundle.Bundle_No}");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        _logger?.LogWarning($"✗ Failed to print NDT bundle: {bundle.Bundle_No}");
+                        _logger?.LogError(ex, $"Error printing individual NDT bundle {bundle?.Bundle_No ?? "Unknown"}: {ex.Message}");
+                        // Continue with next bundle instead of stopping
                     }
                 }
             }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                _logger?.LogWarning($"Database connection error while checking NDT bundles: {ex.Message}. This is expected if database is unavailable.");
+            }
+            catch (Npgsql.NpgsqlException ex)
+            {
+                _logger?.LogWarning($"Database error while checking NDT bundles: {ex.Message}. This is expected if database is unavailable.");
+            }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error printing NDT bundles");
+                _logger?.LogError(ex, $"Unexpected error in CheckAndPrintNDTBundles: {ex.Message}");
             }
         }
 
