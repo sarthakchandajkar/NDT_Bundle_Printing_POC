@@ -22,6 +22,7 @@ namespace NDTBundlePOC.Core.Services
         private readonly IPrinterService _printerService;
         private readonly ExcelExportService _excelService;
         private readonly ILogger<PLCPollingService> _logger;
+        private readonly IPipeCountingActivityService _activityService;
         
         private readonly int _millId;
         private readonly int _pollingIntervalMs;
@@ -40,7 +41,8 @@ namespace NDTBundlePOC.Core.Services
             ExcelExportService excelService,
             ILogger<PLCPollingService> logger,
             int millId = 1,
-            int pollingIntervalMs = 1000) // Poll every 1 second
+            int pollingIntervalMs = 1000,
+            IPipeCountingActivityService activityService = null) // Optional activity service
         {
             _plcService = plcService;
             _ndtBundleService = ndtBundleService;
@@ -48,6 +50,7 @@ namespace NDTBundlePOC.Core.Services
             _printerService = printerService;
             _excelService = excelService;
             _logger = logger;
+            _activityService = activityService;
             _millId = millId;
             _pollingIntervalMs = pollingIntervalMs;
         }
@@ -70,6 +73,10 @@ namespace NDTBundlePOC.Core.Services
                             _previousOKCuts = currentOKCuts;
                             
                             _logger?.LogInformation($"Detected {newOKCuts} new OK cuts");
+                            
+                            // Log activity if service is available
+                            _activityService?.LogActivity("OK", newOKCuts, currentOKCuts, _previousNDTCuts, "PLC");
+                            
                             _okBundleService.ProcessOKCuts(_millId, newOKCuts);
                             
                             // Check for completed OK bundles and print
@@ -84,6 +91,10 @@ namespace NDTBundlePOC.Core.Services
                             _previousNDTCuts = currentNDTCuts;
                             
                             _logger?.LogInformation($"Detected {newNDTCuts} new NDT cuts");
+                            
+                            // Log activity if service is available
+                            _activityService?.LogActivity("NDT", newNDTCuts, _previousOKCuts, currentNDTCuts, "PLC");
+                            
                             _ndtBundleService.ProcessNDTCuts(_millId, newNDTCuts);
                             
                             // Check for completed NDT bundles and print

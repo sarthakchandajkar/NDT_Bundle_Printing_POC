@@ -576,6 +576,69 @@
         .refresh-btn:hover {
             background: #0066BB;
         }
+
+        /* Pipe Counting Activity Section */
+        .pipe-counting-activity {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pipe-counting-activity-header {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pipe-activity-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-top: 10px;
+        }
+
+        .pipe-activity-table th {
+            background: #f8f9fa;
+            padding: 6px;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+
+        .pipe-activity-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .pipe-activity-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .pipe-type-ok {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .pipe-type-ndt {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .pipe-activity-scroll {
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -629,15 +692,33 @@
                 </div>
             </div>
 
-            <!-- NDT Counts Card -->
+            <!-- Current Pipe Counts Card -->
             <div class="monitor-card">
                 <div class="monitor-card-header">
-                    <span>NDT Pipe Counts</span>
+                    <span>Current Pipe Counts (PLC)</span>
                 </div>
                 <div class="monitor-card-content">
                     <div class="monitor-status">
-                        <span class="monitor-label">Current Count:</span>
-                        <span class="monitor-value" id="currentNDTCount">0</span>
+                        <span class="monitor-label">OK Pipes:</span>
+                        <span class="monitor-value" id="currentOKCount" style="color: #28a745;">0</span>
+                    </div>
+                    <div class="monitor-status">
+                        <span class="monitor-label">NDT Pipes:</span>
+                        <span class="monitor-value" id="currentNDTCount" style="color: #dc3545;">0</span>
+                    </div>
+                    <div class="monitor-label">Read from DB251.DBW2 (OK) and DB251.DBW6 (NDT)</div>
+                </div>
+            </div>
+
+            <!-- NDT Counts Card -->
+            <div class="monitor-card">
+                <div class="monitor-card-header">
+                    <span>NDT Bundle Statistics</span>
+                </div>
+                <div class="monitor-card-content">
+                    <div class="monitor-status">
+                        <span class="monitor-label">Total in Bundles:</span>
+                        <span class="monitor-value" id="totalNDTInBundles">0</span>
                     </div>
                     <div class="monitor-status">
                         <span class="monitor-label">Bundles Created:</span>
@@ -677,6 +758,35 @@
             <div class="activity-log" id="activityLog">
                 <div class="activity-log-entry">Waiting for activity...</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Pipe Counting Activity Section -->
+    <div class="pipe-counting-activity" id="pipeCountingActivity">
+        <div class="pipe-counting-activity-header">
+            <span>Pipe Counting Activity (Real-time)</span>
+            <button class="refresh-btn" onclick="refreshPipeActivity()">Refresh</button>
+        </div>
+        <div class="pipe-activity-scroll">
+            <table class="pipe-activity-table" id="pipeActivityTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Count</th>
+                        <th>Total OK</th>
+                        <th>Total NDT</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody id="pipeActivityBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #999; padding: 20px;">
+                            Waiting for pipe counting activity...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -805,7 +915,11 @@
             
             // Initialize system status monitoring
             refreshSystemStatus();
-            systemStatusInterval = setInterval(refreshSystemStatus, 2000); // Refresh every 2 seconds
+            refreshPipeActivity();
+            systemStatusInterval = setInterval(() => {
+                refreshSystemStatus();
+                refreshPipeActivity();
+            }, 2000); // Refresh every 2 seconds
         });
 
         // Initialize SignalR connection for heartbeat updates
@@ -1275,17 +1389,26 @@
                 // Update Printer Status
                 updatePrinterStatusDisplay(data.printer);
                 
-                // Update NDT Counts
-                document.getElementById('currentNDTCount').textContent = data.ndtCounts.totalPipes;
-                document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated;
-                document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted;
+                // Update Current Pipe Counts (from PLC)
+                if (data.pipeCounts) {
+                    document.getElementById('currentOKCount').textContent = data.pipeCounts.currentOKCuts || 0;
+                    document.getElementById('currentNDTCount').textContent = data.pipeCounts.currentNDTCuts || 0;
+                }
+                
+                // Update NDT Bundle Statistics
+                document.getElementById('totalNDTInBundles').textContent = data.ndtCounts.totalPipes || 0;
+                document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated || 0;
+                document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted || 0;
                 
                 // Update Bundle Status
-                document.getElementById('activeBundles').textContent = data.bundleStatus.active;
-                document.getElementById('readyBundles').textContent = data.bundleStatus.ready;
-                document.getElementById('printedBundles').textContent = data.bundleStatus.printed;
+                document.getElementById('activeBundles').textContent = data.bundleStatus.active || 0;
+                document.getElementById('readyBundles').textContent = data.bundleStatus.ready || 0;
+                document.getElementById('printedBundles').textContent = data.bundleStatus.printed || 0;
+                
+                addActivityLog('System status refreshed');
             } catch (error) {
                 console.error('Error refreshing system status:', error);
+                addActivityLog('Error refreshing system status: ' + error.message);
                 // Fallback to individual checks
                 await Promise.all([
                     checkPLCStatus(),
@@ -1294,6 +1417,52 @@
                     updateBundleStatus()
                 ]);
             }
+        }
+
+        // Pipe Counting Activity Functions
+        async function refreshPipeActivity() {
+            try {
+                const response = await fetch('/api/pipe-counting-activity');
+                const data = await response.json();
+                
+                updatePipeActivityTable(data.activities || []);
+                
+                // Update current counts in system monitor
+                if (data.currentCounts) {
+                    document.getElementById('currentOKCount').textContent = data.currentCounts.okCuts || 0;
+                    document.getElementById('currentNDTCount').textContent = data.currentCounts.ndtCuts || 0;
+                }
+            } catch (error) {
+                console.error('Error refreshing pipe activity:', error);
+                addActivityLog('Error refreshing pipe activity: ' + error.message);
+            }
+        }
+
+        function updatePipeActivityTable(activities) {
+            const tbody = document.getElementById('pipeActivityBody');
+            
+            if (activities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999; padding: 20px;">No pipe counting activity yet. Waiting for pipes to be counted...</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            activities.forEach(activity => {
+                const time = new Date(activity.timestamp);
+                const timeStr = formatDateTime(time);
+                const typeClass = activity.pipeType === 'OK' ? 'pipe-type-ok' : 'pipe-type-ndt';
+                
+                html += `<tr>
+                    <td>${timeStr}</td>
+                    <td class="${typeClass}">${activity.pipeType}</td>
+                    <td style="font-weight: bold;">+${activity.count}</td>
+                    <td>${activity.totalOKCuts}</td>
+                    <td>${activity.totalNDTCuts}</td>
+                    <td>${activity.source || 'PLC'}</td>
+                </tr>`;
+            });
+            
+            tbody.innerHTML = html;
         }
 
         function updatePLCStatusDisplay(plcData) {
@@ -1369,10 +1538,6 @@
 
         async function updateNDTCounts() {
             try {
-                // Get current NDT count from PLC
-                const heartbeatResponse = await fetch('/api/plc/heartbeat');
-                const heartbeatData = await heartbeatResponse.json();
-                
                 // Get bundles data
                 const bundlesResponse = await fetch('/api/bundles');
                 const bundles = await bundlesResponse.json();
@@ -1381,7 +1546,7 @@
                 const totalNDTPcs = bundles.reduce((sum, b) => sum + (b.ndt_Pcs || 0), 0);
                 const printedCount = bundles.filter(b => b.status === 3).length;
                 
-                document.getElementById('currentNDTCount').textContent = totalNDTPcs;
+                document.getElementById('totalNDTInBundles').textContent = totalNDTPcs;
                 document.getElementById('bundlesCreated').textContent = bundles.length;
                 document.getElementById('tagsPrinted').textContent = printedCount;
                 

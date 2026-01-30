@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,6 +84,11 @@ builder.Services.AddSignalR();
 // Add Heartbeat Notifier (SignalR implementation)
 builder.Services.AddSingleton<IHeartbeatNotifier, HeartbeatNotifier>();
 
+// Add Pipe Counting Activity Service (register both interfaces)
+builder.Services.AddSingleton<PipeCountingActivityService>();
+builder.Services.AddSingleton<IPipeCountingActivityService>(sp => sp.GetRequiredService<PipeCountingActivityService>());
+builder.Services.AddSingleton<IPipeCountingActivityServiceExtended>(sp => sp.GetRequiredService<PipeCountingActivityService>());
+
 // Add PLC Heartbeat Monitor Service as background service (if enabled)
 if (enableHeartbeatMonitoring)
 {
@@ -112,6 +118,7 @@ if (enablePLCPolling)
         var okBundleService = sp.GetRequiredService<IOKBundleService>();
         var printerService = sp.GetRequiredService<IPrinterService>();
         var excelService = sp.GetRequiredService<ExcelExportService>();
+        var activityService = sp.GetRequiredService<IPipeCountingActivityService>();
         var logger = sp.GetRequiredService<ILogger<PLCPollingService>>();
         
         return new PLCPollingService(
@@ -122,7 +129,8 @@ if (enablePLCPolling)
             excelService,
             logger,
             millId,
-            pollingIntervalMs
+            pollingIntervalMs,
+            activityService
         );
     });
 }
@@ -380,12 +388,13 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
 });
 
 // System status endpoint
-app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService) =>
+app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IPipeCountingActivityServiceExtended activityService) =>
 {
     try
     {
         var bundles = ndtBundleService.GetAllNDTBundles();
         var readyBundles = ndtBundleService.GetBundlesReadyForPrinting();
+        var (okCuts, ndtCuts) = activityService?.GetCurrentCounts() ?? (0, 0);
         
         return Results.Ok(new
         {
@@ -402,6 +411,11 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
                 port = 9100,
                 status = "ready" // Will be updated based on test print
             },
+            pipeCounts = new
+            {
+                currentOKCuts = okCuts,
+                currentNDTCuts = ndtCuts
+            },
             ndtCounts = new
             {
                 totalPipes = bundles.Sum(b => b.NDT_Pcs),
@@ -413,6 +427,38 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
                 active = bundles.Count(b => b.Status == 1),
                 ready = readyBundles.Count,
                 printed = bundles.Count(b => b.Status == 3)
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// Pipe counting activity endpoint
+app.MapGet("/api/pipe-counting-activity", (IPipeCountingActivityServiceExtended activityService) =>
+{
+    try
+    {
+        var activities = activityService?.GetRecentActivity(100) ?? new List<PipeCountingActivity>();
+        var (okCuts, ndtCuts) = activityService?.GetCurrentCounts() ?? (0, 0);
+        
+        return Results.Ok(new
+        {
+            activities = activities.Select(a => new
+            {
+                timestamp = a.Timestamp,
+                pipeType = a.PipeType,
+                count = a.Count,
+                totalOKCuts = a.TotalOKCuts,
+                totalNDTCuts = a.TotalNDTCuts,
+                source = a.Source
+            }),
+            currentCounts = new
+            {
+                okCuts = okCuts,
+                ndtCuts = ndtCuts
             }
         });
     }
