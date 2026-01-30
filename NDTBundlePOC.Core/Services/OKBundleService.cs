@@ -78,67 +78,88 @@ namespace NDTBundlePOC.Core.Services
             // For OK bundles, use a default pieces per bundle (can be configured)
             int requiredOKPcs = DEFAULT_OK_PCS_PER_BUNDLE;
 
-            // Get or create active OK bundle
-            var activeBundle = GetActiveOKBundle(poPlan.PO_Plan_ID);
-            bool needNewBundle = false;
-            string bundleNo = "";
-
             int remainingCuts = newOKCuts;
 
-            if (activeBundle != null)
+            // Process cuts and create bundles until all cuts are allocated (similar to NDT bundle logic)
+            while (remainingCuts > 0)
             {
-                // Calculate how many cuts go to current bundle
-                int cutsForCurrentBundle = Math.Min(remainingCuts, requiredOKPcs - activeBundle.OK_Pcs);
-
-                // Update existing bundle
-                activeBundle.OK_Pcs += cutsForCurrentBundle;
-                remainingCuts -= cutsForCurrentBundle;
-                UpdateOKBundle(activeBundle);
-
-                // Check if bundle is complete
-                if (activeBundle.OK_Pcs >= requiredOKPcs)
+                // Get current active bundle
+                var currentBundle = GetActiveOKBundle(poPlan.PO_Plan_ID);
+                
+                if (currentBundle != null)
                 {
-                    activeBundle.Status = 2; // Completed
-                    activeBundle.BundleEndTime = DateTime.Now;
-                    activeBundle.IsFullBundle = true;
-                    UpdateOKBundle(activeBundle);
-
-                    needNewBundle = true;
-                    string newBatchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, activeBundle.Batch_No);
-                    bundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
-                }
-            }
-            else
-            {
-                // No active bundle, create new one
-                needNewBundle = true;
-            }
-
-            if (needNewBundle && string.IsNullOrEmpty(bundleNo))
-            {
-                string batchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, "");
-                bundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, batchNo);
-            }
-
-            // If we have a new bundle and remaining cuts, add them to the new bundle
-            if (needNewBundle && remainingCuts > 0 && !string.IsNullOrEmpty(bundleNo))
-            {
-                var newBundle = GetOKBundles()
-                    .FirstOrDefault(b => b.Bundle_No == bundleNo);
-                if (newBundle != null)
-                {
-                    newBundle.OK_Pcs = remainingCuts;
+                    // Calculate how many cuts go to current bundle
+                    int cutsForCurrentBundle = Math.Min(remainingCuts, requiredOKPcs - currentBundle.OK_Pcs);
                     
-                    // Check if bundle is complete immediately
-                    if (newBundle.OK_Pcs >= requiredOKPcs)
+                    // Update existing bundle
+                    currentBundle.OK_Pcs += cutsForCurrentBundle;
+                    remainingCuts -= cutsForCurrentBundle;
+                    UpdateOKBundle(currentBundle);
+
+                    // Check if bundle is complete
+                    if (currentBundle.OK_Pcs >= requiredOKPcs)
                     {
-                        newBundle.Status = 2; // Completed
-                        newBundle.BundleEndTime = DateTime.Now;
-                        newBundle.IsFullBundle = true;
-                        Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed with {newBundle.OK_Pcs} pipes. Ready for printing.");
+                        // Bundle is complete - mark as completed and ready for printing
+                        currentBundle.Status = 2; // Completed
+                        currentBundle.BundleEndTime = DateTime.Now;
+                        currentBundle.IsFullBundle = true;
+                        UpdateOKBundle(currentBundle);
+
+                        // Create new bundle for remaining cuts (if any)
+                        if (remainingCuts > 0)
+                        {
+                            string newBatchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
+                            string newBundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
+                            Console.WriteLine($"✓ Created new OK bundle {newBundleNo} for remaining {remainingCuts} cuts");
+                        }
+                        
+                        Console.WriteLine($"✓ OK Bundle {currentBundle.Bundle_No} completed with {currentBundle.OK_Pcs} pipes. Ready for printing.");
                     }
-                    
-                    UpdateOKBundle(newBundle);
+                    else
+                    {
+                        // Bundle not complete yet, but check if PO ended
+                        if (poPlan.Status >= 3) // PO completed
+                        {
+                            currentBundle.Status = 2;
+                            currentBundle.BundleEndTime = DateTime.Now;
+                            currentBundle.IsFullBundle = false;
+                            UpdateOKBundle(currentBundle);
+                        }
+                        // No more cuts to process
+                        break;
+                    }
+                }
+                else
+                {
+                    // No active bundle, create new one
+                    string batchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, "");
+                    string newBundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, batchNo);
+
+                    // Get the newly created bundle and add cuts to it
+                    var newBundle = GetOKBundles()
+                        .FirstOrDefault(b => b.Bundle_No == newBundleNo);
+                    if (newBundle != null)
+                    {
+                        int cutsForNewBundle = Math.Min(remainingCuts, requiredOKPcs);
+                        newBundle.OK_Pcs = cutsForNewBundle;
+                        remainingCuts -= cutsForNewBundle;
+                        UpdateOKBundle(newBundle);
+                        
+                        // If bundle is complete immediately, mark it
+                        if (newBundle.OK_Pcs >= requiredOKPcs)
+                        {
+                            newBundle.Status = 2; // Completed
+                            newBundle.BundleEndTime = DateTime.Now;
+                            newBundle.IsFullBundle = true;
+                            UpdateOKBundle(newBundle);
+                            
+                            Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed with {newBundle.OK_Pcs} pipes. Ready for printing.");
+                        }
+                    }
+                    else
+                    {
+                        break; // Could not create bundle, exit loop
+                    }
                 }
             }
         }
