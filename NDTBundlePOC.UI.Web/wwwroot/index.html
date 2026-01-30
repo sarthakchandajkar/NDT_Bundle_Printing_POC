@@ -1915,16 +1915,47 @@
         async function loadPOPlans() {
             try {
                 const response = await fetch('/api/po-plans');
-                allPOPlans = await response.json();
+                const data = await response.json();
+                
+                // Ensure we have an array - handle both array and object responses
+                if (Array.isArray(data)) {
+                    allPOPlans = data;
+                } else if (data && Array.isArray(data.data)) {
+                    allPOPlans = data.data;
+                } else if (data && data.success === false) {
+                    // Error response - use empty array
+                    console.warn('PO Plans API returned error:', data.message);
+                    allPOPlans = [];
+                } else {
+                    // Unexpected format - default to empty array
+                    console.warn('Unexpected PO Plans response format:', data);
+                    allPOPlans = [];
+                }
+                
                 displayPOPlans(allPOPlans);
             } catch (error) {
                 console.error('Error loading PO Plans:', error);
-                alert('Error loading PO Plans: ' + error.message);
+                allPOPlans = []; // Set to empty array on error
+                displayPOPlans(allPOPlans); // Display empty list
+                alert('Error loading PO Plans: ' + error.message + '\n\nThis may be due to database connection issues. Please check your connection string in appsettings.json');
             }
         }
 
         function displayPOPlans(poPlans) {
             const tbody = document.getElementById('poPlanTableBody');
+            
+            // Ensure poPlans is an array
+            if (!Array.isArray(poPlans)) {
+                console.error('displayPOPlans: poPlans is not an array:', poPlans);
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">Error: Invalid data format. Expected array but got: ' + typeof poPlans + '</td></tr>';
+                return;
+            }
+            
+            if (poPlans.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #666;">No PO Plans found. Click "Add New PO Plan" to create one.</td></tr>';
+                return;
+            }
+            
             tbody.innerHTML = poPlans.map(plan => {
                 const id = plan.pO_Plan_ID || plan.po_Plan_ID || plan.pOPlan_ID || plan.poPlan_ID || '';
                 const plcPoid = plan.pLC_POID || plan.plc_POID || plan.pLCPOID || plan.plcPOID || '';

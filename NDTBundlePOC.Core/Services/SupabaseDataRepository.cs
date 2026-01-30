@@ -390,10 +390,12 @@ namespace NDTBundlePOC.Core.Services
 
         public List<POPlan> GetPOPlans()
         {
-            var poPlans = new List<POPlan>();
-            using (var conn = GetConnection())
+            return SafeExecute(() =>
             {
-                conn.Open();
+                var poPlans = new List<POPlan>();
+                using (var conn = GetConnection())
+                {
+                    conn.Open();
                 using (var cmd = new NpgsqlCommand(@"SELECT ""PO_Plan_ID"", ""PLC_POID"", ""PO_No"", ""Pipe_Type"", ""Pipe_Size"", ""PcsPerBundle"", ""Pipe_Len"", ""PipeWt_per_mtr"", ""SAP_Type"", ""Shop_ID""
                                                     FROM ""PO_Plan""
                                                     ORDER BY ""PO_Plan_ID"" DESC", conn))
@@ -420,6 +422,7 @@ namespace NDTBundlePOC.Core.Services
                 }
             }
             return poPlans;
+            }, new List<POPlan>(), "GetPOPlans");
         }
 
         public void AddPOPlan(POPlan poPlan)

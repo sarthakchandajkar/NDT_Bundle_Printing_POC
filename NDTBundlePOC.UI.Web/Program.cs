@@ -577,11 +577,31 @@ app.MapGet("/api/po-plans", (IDataRepository repository) =>
     try
     {
         var poPlans = repository.GetPOPlans();
+        if (poPlans == null)
+        {
+            Console.WriteLine("⚠ GetPOPlans returned null - returning empty list");
+            return Results.Ok(new List<POPlan>());
+        }
         return Results.Ok(poPlans);
+    }
+    catch (System.Net.Sockets.SocketException ex)
+    {
+        Console.WriteLine($"✗ Network error in /api/po-plans endpoint: {ex.Message}");
+        Console.WriteLine($"  → Database connection failed - returning empty list");
+        return Results.Ok(new List<POPlan>());
+    }
+    catch (Npgsql.NpgsqlException ex)
+    {
+        Console.WriteLine($"✗ Database error in /api/po-plans endpoint: {ex.Message}");
+        Console.WriteLine($"  → Database connection failed - returning empty list");
+        return Results.Ok(new List<POPlan>());
     }
     catch (Exception ex)
     {
-        return Results.BadRequest(new { success = false, message = ex.Message });
+        Console.WriteLine($"✗ Error in /api/po-plans endpoint: {ex.Message}");
+        Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
+        // Return empty list instead of error object to allow UI to continue
+        return Results.Ok(new List<POPlan>());
     }
 });
 
