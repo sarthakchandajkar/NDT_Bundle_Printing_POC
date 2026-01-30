@@ -67,6 +67,48 @@ namespace NDTBundlePOC.Core.Services
                     {
                         // Read OK cuts from PLC
                         int currentOKCuts = ReadOKCuts();
+                        
+                        // Read NDT cuts from PLC (needed for activity service)
+                        int currentNDTCuts = _plcService.ReadNDTCuts(_millId);
+                        
+                        // ALWAYS update activity service with current PLC values (ensures UI shows current values)
+                        // This is important when service restarts or values don't increase
+                        if (_activityService != null)
+                        {
+                            // Always update counts, but only log activity entry if there's an increase
+                            if (currentOKCuts > _previousOKCuts)
+                            {
+                                int newOKCuts = currentOKCuts - _previousOKCuts;
+                                _activityService.LogActivity("OK", newOKCuts, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                            else if (_previousOKCuts == 0 && currentOKCuts > 0)
+                            {
+                                // Service just started - update with current values without processing as new cuts
+                                _activityService.LogActivity("OK", 0, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                            else if (currentOKCuts != _previousOKCuts)
+                            {
+                                // Value changed (decreased or reset) - update counts silently
+                                _activityService.LogActivity("OK", 0, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                            
+                            // Also update NDT counts in the same call if OK didn't change
+                            if (currentNDTCuts > _previousNDTCuts)
+                            {
+                                _activityService.LogActivity("NDT", currentNDTCuts - _previousNDTCuts, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                            else if (_previousNDTCuts == 0 && currentNDTCuts > 0)
+                            {
+                                _activityService.LogActivity("NDT", 0, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                            else if (currentNDTCuts != _previousNDTCuts && currentOKCuts == _previousOKCuts)
+                            {
+                                // NDT changed but OK didn't - update counts
+                                _activityService.LogActivity("NDT", 0, currentOKCuts, currentNDTCuts, "PLC");
+                            }
+                        }
+                        
+                        // Process new OK cuts (only when there's an increase)
                         if (currentOKCuts > _previousOKCuts)
                         {
                             int newOKCuts = currentOKCuts - _previousOKCuts;
@@ -74,14 +116,16 @@ namespace NDTBundlePOC.Core.Services
                             
                             _logger?.LogInformation($"Detected {newOKCuts} new OK cuts");
                             
-                            // Log activity if service is available
-                            _activityService?.LogActivity("OK", newOKCuts, currentOKCuts, _previousNDTCuts, "PLC");
-                            
                             _okBundleService.ProcessOKCuts(_millId, newOKCuts);
                         }
+                        else if (_previousOKCuts == 0 && currentOKCuts > 0)
+                        {
+                            // Service just started - initialize previous value to current to avoid processing all existing cuts
+                            _previousOKCuts = currentOKCuts;
+                            _logger?.LogInformation($"Initialized OK cuts tracking: {currentOKCuts} (service started)");
+                        }
 
-                        // Read NDT cuts from PLC
-                        int currentNDTCuts = _plcService.ReadNDTCuts(_millId);
+                        // Process new NDT cuts (only when there's an increase)
                         if (currentNDTCuts > _previousNDTCuts)
                         {
                             int newNDTCuts = currentNDTCuts - _previousNDTCuts;
@@ -89,10 +133,13 @@ namespace NDTBundlePOC.Core.Services
                             
                             _logger?.LogInformation($"Detected {newNDTCuts} new NDT cuts");
                             
-                            // Log activity if service is available
-                            _activityService?.LogActivity("NDT", newNDTCuts, _previousOKCuts, currentNDTCuts, "PLC");
-                            
                             _ndtBundleService.ProcessNDTCuts(_millId, newNDTCuts);
+                        }
+                        else if (_previousNDTCuts == 0 && currentNDTCuts > 0)
+                        {
+                            // Service just started - initialize previous value to current to avoid processing all existing cuts
+                            _previousNDTCuts = currentNDTCuts;
+                            _logger?.LogInformation($"Initialized NDT cuts tracking: {currentNDTCuts} (service started)");
                         }
 
                         // ALWAYS check for completed bundles and print (not just when new cuts are detected)
@@ -253,11 +300,15 @@ namespace NDTBundlePOC.Core.Services
                 if (readyBundles.Count > 0)
                 {
                     _logger?.LogInformation($"Found {readyBundles.Count} NDT bundle(s) ready for printing");
+                    foreach (var b in readyBundles)
+                    {
+                        _logger?.LogInformation($"  - Bundle {b.Bundle_No} (ID: {b.NDTBundle_ID}, Status: {b.Status}, Pcs: {b.NDT_Pcs})");
+                    }
                 }
                 
                 foreach (var bundle in readyBundles)
                 {
-                    _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No} (ID: {bundle.NDTBundle_ID}, Pcs: {bundle.NDT_Pcs})");
+                    _logger?.LogInformation($"Printing NDT bundle: {bundle.Bundle_No} (ID: {bundle.NDTBundle_ID}, Pcs: {bundle.NDT_Pcs}, Status: {bundle.Status})");
                     bool printed = _ndtBundleService.PrintBundleTag(
                         bundle.NDTBundle_ID,
                         _printerService,

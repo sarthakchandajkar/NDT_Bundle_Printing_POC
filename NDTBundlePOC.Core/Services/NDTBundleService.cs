@@ -58,9 +58,13 @@ namespace NDTBundlePOC.Core.Services
                         currentBundle.IsFullBundle = true;
                         _repository.UpdateNDTBundle(currentBundle);
 
-                        // Create new bundle for remaining cuts
-                        string newBatchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
-                        string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
+                        // Create new bundle for remaining cuts (if any)
+                        if (remainingCuts > 0)
+                        {
+                            string newBatchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
+                            string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
+                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} for remaining {remainingCuts} cuts");
+                        }
                         
                         Console.WriteLine($"✓ NDT Bundle {currentBundle.Bundle_No} completed with {currentBundle.NDT_Pcs} pipes. Ready for printing.");
                 }
