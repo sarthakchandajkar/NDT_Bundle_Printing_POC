@@ -62,6 +62,10 @@ var enableHeartbeatMonitoring = true;   // Enable heartbeat monitoring
 var useTestMode = true;                 // Set to true to log tags instead of printing (for testing)
                                         // Set to false to enable actual physical printing
 
+// OK Bundle Printing Configuration
+var bypassOKBundlePLCConditions = true; // Set to true to bypass PLC signal requirements for OK bundles (for testing)
+                                        // Set to false for production (requires L1L2_PipeDone signal and packing station)
+
 // Export/Output Path
 var exportPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NDT_Bundle_Exports");
 
@@ -162,7 +166,8 @@ builder.Services.AddSingleton<IControllablePLCPollingService>(sp =>
         logger,
         activityService,
         millId,
-        pollingIntervalMs
+        pollingIntervalMs,
+        bypassOKBundlePLCConditions
     );
 });
 

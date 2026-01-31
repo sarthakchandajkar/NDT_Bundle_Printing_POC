@@ -31,6 +31,7 @@ namespace NDTBundlePOC.Core.Services
         private readonly IPipeCountingActivityService _activityService;
         private readonly int _millId;
         private readonly int _pollingIntervalMs;
+        private readonly bool _bypassOKBundlePLCConditions; // For testing: bypass PLC signal requirements
         
         private CancellationTokenSource _cancellationTokenSource;
         private Task _pollingTask;
@@ -64,7 +65,8 @@ namespace NDTBundlePOC.Core.Services
             ILogger<ControllablePLCPollingService> logger,
             IPipeCountingActivityService activityService,
             int millId = 1,
-            int pollingIntervalMs = 1000)
+            int pollingIntervalMs = 1000,
+            bool bypassOKBundlePLCConditions = true) // Default to true for testing
         {
             _plcService = plcService;
             _ndtBundleService = ndtBundleService;
@@ -75,6 +77,13 @@ namespace NDTBundlePOC.Core.Services
             _activityService = activityService;
             _millId = millId;
             _pollingIntervalMs = pollingIntervalMs;
+            _bypassOKBundlePLCConditions = bypassOKBundlePLCConditions;
+            
+            if (_bypassOKBundlePLCConditions)
+            {
+                _logger?.LogWarning("⚠ TEST MODE: OK bundle PLC conditions are BYPASSED. Bundles will print automatically when Status=2.");
+                _logger?.LogWarning("  → Set bypassOKBundlePLCConditions=false for production (requires L1L2_PipeDone signal and packing station)");
+            }
         }
 
         public bool Start()
@@ -374,6 +383,12 @@ namespace NDTBundlePOC.Core.Services
             try
             {
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
+                if (readyBundles == null)
+                {
+                    _logger?.LogWarning("GetBundlesReadyForPrinting returned null - database may be unavailable");
+                    return;
+                }
+                
                 if (readyBundles.Count > 0)
                 {
                     _logger?.LogInformation($"Found {readyBundles.Count} OK bundle(s) with Status=2 (Completed)");
@@ -384,10 +399,21 @@ namespace NDTBundlePOC.Core.Services
                     bool pipeDone = CheckOKBundleDone();
                     bool atPackingStation = _plcService != null && _plcService.IsBundleAtPackingStation(_millId);
                     
-                    if (pipeDone && atPackingStation)
+                    // Check if we should print: either PLC conditions met OR bypass enabled for testing
+                    bool shouldPrint = (pipeDone && atPackingStation) || _bypassOKBundlePLCConditions;
+                    
+                    if (shouldPrint)
                     {
-                        _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (ID: {bundle.OKBundle_ID}, Pcs: {bundle.OK_Pcs}, Status: {bundle.Status})");
-                        _logger?.LogInformation($"  Conditions met: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
+                        if (_bypassOKBundlePLCConditions && (!pipeDone || !atPackingStation))
+                        {
+                            _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (TEST MODE - PLC conditions bypassed)");
+                            _logger?.LogInformation($"  → Actual PLC conditions: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
+                        }
+                        else
+                        {
+                            _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (ID: {bundle.OKBundle_ID}, Pcs: {bundle.OK_Pcs}, Status: {bundle.Status})");
+                            _logger?.LogInformation($"  Conditions met: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
+                        }
                         
                         bool printed = _okBundleService.PrintBundleTag(
                             bundle.OKBundle_ID,
@@ -407,7 +433,14 @@ namespace NDTBundlePOC.Core.Services
                     }
                     else
                     {
-                        _logger?.LogDebug($"OK bundle {bundle.Bundle_No} waiting for printing conditions: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
+                        _logger?.LogInformation($"⚠ OK bundle {bundle.Bundle_No} waiting for printing conditions:");
+                        _logger?.LogInformation($"  → L1L2_PipeDone (DB250.DBX3.4): {pipeDone}");
+                        _logger?.LogInformation($"  → AtPackingStation: {atPackingStation}");
+                        _logger?.LogInformation($"  → Bypass enabled: {_bypassOKBundlePLCConditions}");
+                        if (!_bypassOKBundlePLCConditions)
+                        {
+                            _logger?.LogInformation($"  → Both PLC conditions must be TRUE for printing (or enable bypass for testing)");
+                        }
                     }
                 }
             }
@@ -480,32 +513,45 @@ namespace NDTBundlePOC.Core.Services
             try
             {
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
-                if (readyBundles.Count > 0)
+                if (readyBundles == null || readyBundles.Count == 0)
                 {
-                    var bundle = readyBundles.OrderByDescending(b => b.BundleEndTime).First();
-                    
-                    bool atPackingStation = _plcService != null && _plcService.IsBundleAtPackingStation(_millId);
-                    
-                    if (atPackingStation)
+                    return;
+                }
+                
+                var bundle = readyBundles.OrderByDescending(b => b.BundleEndTime).First();
+                
+                bool atPackingStation = _plcService != null && _plcService.IsBundleAtPackingStation(_millId);
+                
+                // Check if we should print: either at packing station OR bypass enabled for testing
+                bool shouldPrint = atPackingStation || _bypassOKBundlePLCConditions;
+                
+                if (shouldPrint)
+                {
+                    if (_bypassOKBundlePLCConditions && !atPackingStation)
                     {
-                        _logger?.LogInformation($"Processing OK bundle print: {bundle.Bundle_No} (Status: {bundle.Status}, AtPackingStation: {atPackingStation})");
-                        
-                        _okBundleService.PrintBundleTag(
-                            bundle.OKBundle_ID,
-                            _printerService,
-                            _excelService,
-                            _plcService
-                        );
-
-                        if (_plcService is RealS7PLCService realPlc)
-                        {
-                            realPlc.WriteAcknowledgment("DB260.DBX3.4", true);
-                        }
+                        _logger?.LogInformation($"Processing OK bundle print: {bundle.Bundle_No} (TEST MODE - packing station check bypassed)");
+                        _logger?.LogInformation($"  → Actual AtPackingStation: {atPackingStation}");
                     }
                     else
                     {
-                        _logger?.LogDebug($"OK bundle {bundle.Bundle_No} waiting for packing station (L1L2_PipeDone received but not at packing station)");
+                        _logger?.LogInformation($"Processing OK bundle print: {bundle.Bundle_No} (Status: {bundle.Status}, AtPackingStation: {atPackingStation})");
                     }
+                    
+                    _okBundleService.PrintBundleTag(
+                        bundle.OKBundle_ID,
+                        _printerService,
+                        _excelService,
+                        _plcService
+                    );
+
+                    if (_plcService is RealS7PLCService realPlc)
+                    {
+                        realPlc.WriteAcknowledgment("DB260.DBX3.4", true);
+                    }
+                }
+                else
+                {
+                    _logger?.LogInformation($"OK bundle {bundle.Bundle_No} waiting for packing station (L1L2_PipeDone received but not at packing station)");
                 }
             }
             catch (Exception ex)

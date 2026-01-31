@@ -92,7 +92,17 @@ namespace NDTBundlePOC.Core.Services
 
         private NpgsqlConnection GetConnection()
         {
-            return new NpgsqlConnection(_connectionString);
+            // Npgsql should handle IPv6 automatically, but we can add connection string options if needed
+            // If IPv6 connection fails, try adding: "Include Error Detail=true;" to see more details
+            var connectionString = _connectionString;
+            
+            // Ensure we have proper SSL and connection timeout settings
+            if (!connectionString.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                connectionString += "Timeout=30;";
+            }
+            
+            return new NpgsqlConnection(connectionString);
         }
 
         /// <summary>
