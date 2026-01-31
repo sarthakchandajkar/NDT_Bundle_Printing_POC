@@ -217,6 +217,7 @@ if ((enablePLCPolling || enableHeartbeatMonitoring) && !string.IsNullOrEmpty(plc
     Console.WriteLine($"Printer Port:     {printerPort}");
     Console.WriteLine($"Printer Mode:     {(useNetwork ? "Network (Ethernet)" : "Serial")}");
     Console.WriteLine($"Printing Mode:    {(useTestMode ? "TEST MODE (Logging Only)" : "PRODUCTION (Physical Printing)")}");
+    Console.WriteLine($"OK Bundle PLC Bypass: {(bypassOKBundlePLCConditions ? "ENABLED (Test Mode)" : "DISABLED (Production)")}");
     Console.WriteLine($"Mill ID:          {millId}");
     Console.WriteLine($"PLC Polling:      {(enablePLCPolling ? "ENABLED" : "DISABLED")}");
     Console.WriteLine($"Heartbeat Monitor: {(enableHeartbeatMonitoring ? "ENABLED" : "DISABLED")}");
