@@ -513,20 +513,36 @@ namespace NDTBundlePOC.Core.Services
         {
             try
             {
+                _logger?.LogDebug($"🔍 Checking PO completion: PLC OK={currentOKCuts}, PLC NDT={currentNDTCuts}");
+                
                 // Get active PO
                 var activeSlit = _repository?.GetActiveSlit(0);
-                if (activeSlit == null) return;
+                if (activeSlit == null)
+                {
+                    _logger?.LogDebug("⚠️ PO completion check skipped: No active slit found");
+                    return;
+                }
 
                 var poPlan = _repository?.GetPOPlan(activeSlit.PO_Plan_ID);
-                if (poPlan == null) return;
+                if (poPlan == null)
+                {
+                    _logger?.LogDebug($"⚠️ PO completion check skipped: No PO plan found for Slit ID {activeSlit.Slit_ID}");
+                    return;
+                }
+
+                _logger?.LogDebug($"🔍 PO completion check: PO_No={poPlan.PO_No}, PO_Plan_ID={poPlan.PO_Plan_ID}");
 
                 // Get total pipes processed for this PO
                 int totalOKProcessed = _okBundleService.GetTotalOKPipesProcessed(poPlan.PO_Plan_ID);
                 int totalNDTProcessed = _ndtBundleService.GetTotalNDTPipesProcessed(poPlan.PO_Plan_ID);
 
+                _logger?.LogDebug($"🔍 PO completion check: Total OK processed={totalOKProcessed}, Total NDT processed={totalNDTProcessed}");
+
                 // Check if all pipes are processed
                 bool allOKProcessed = totalOKProcessed >= currentOKCuts;
                 bool allNDTProcessed = totalNDTProcessed >= currentNDTCuts;
+
+                _logger?.LogDebug($"🔍 PO completion check: allOKProcessed={allOKProcessed} ({totalOKProcessed}>={currentOKCuts}), allNDTProcessed={allNDTProcessed} ({totalNDTProcessed}>={currentNDTCuts})");
 
                 if (allOKProcessed && allNDTProcessed && (totalOKProcessed > 0 || totalNDTProcessed > 0))
                 {
@@ -540,10 +556,15 @@ namespace NDTBundlePOC.Core.Services
                     CheckAndPrintOKBundles();
                     CheckAndPrintNDTBundles();
                 }
+                else
+                {
+                    _logger?.LogDebug($"⚠️ PO not complete yet: allOKProcessed={allOKProcessed}, allNDTProcessed={allNDTProcessed}, totalOK={totalOKProcessed}, totalNDT={totalNDTProcessed}, hasData={totalOKProcessed > 0 || totalNDTProcessed > 0}");
+                }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, $"Error checking PO completion: {ex.Message}");
+                _logger?.LogError(ex, $"✗ Error checking PO completion: {ex.Message}");
+                _logger?.LogError(ex, $"Stack trace: {ex.StackTrace}");
             }
         }
 
