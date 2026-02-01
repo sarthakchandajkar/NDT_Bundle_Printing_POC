@@ -47,8 +47,15 @@ namespace NDTBundlePOC.Core.Services
                 
                 if (previousMode != testMode)
                 {
-                    _logger?.LogInformation($"Print Mode changed: {(previousMode ? "TEST MODE" : "PRODUCTION MODE")} → {(testMode ? "TEST MODE" : "PRODUCTION MODE")}");
-                    Console.WriteLine($"🔄 Print Mode: {(testMode ? "TEST MODE (Logging Only)" : "PRODUCTION MODE (Physical Printing)")}");
+                    string previousModeStr = previousMode ? "TEST MODE" : "PRODUCTION MODE";
+                    string newModeStr = testMode ? "TEST MODE" : "PRODUCTION MODE";
+                    _logger?.LogInformation($"Print Mode changed: {previousModeStr} → {newModeStr}");
+                    Console.WriteLine($"🔄 Print Mode changed: {previousModeStr} → {newModeStr}");
+                    Console.WriteLine($"   → Current mode: {(testMode ? "TEST MODE (Logging Only)" : "PRODUCTION MODE (Physical Printing)")}");
+                }
+                else
+                {
+                    Console.WriteLine($"⚠ Print Mode unchanged: Already in {(testMode ? "TEST MODE" : "PRODUCTION MODE")}");
                 }
                 
                 return true;

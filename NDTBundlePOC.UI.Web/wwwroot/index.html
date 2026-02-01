@@ -2150,19 +2150,32 @@
 
         async function togglePrintMode() {
             const btn = document.getElementById('btnPrintMode');
-            if (!btn) return;
+            if (!btn) {
+                console.error('Print mode button not found');
+                return;
+            }
 
             // Get current mode
             try {
+                console.log('Fetching current print mode...');
                 const currentResponse = await fetch('/api/print-mode');
-                const currentData = await response.json();
+                
+                if (!currentResponse.ok) {
+                    throw new Error(`HTTP error! status: ${currentResponse.status}`);
+                }
+                
+                const currentData = await currentResponse.json();
+                console.log('Current print mode:', currentData);
+                
                 const newMode = !currentData.isTestMode;
+                console.log('Toggling to new mode:', newMode ? 'TEST' : 'PRODUCTION');
 
                 // Disable button during toggle
                 btn.disabled = true;
                 btn.textContent = 'Switching...';
 
                 // Toggle mode
+                console.log('Sending toggle request...');
                 const response = await fetch('/api/print-mode', {
                     method: 'POST',
                     headers: {
@@ -2171,7 +2184,13 @@
                     body: JSON.stringify({ testMode: newMode })
                 });
 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+                }
+
                 const data = await response.json();
+                console.log('Toggle response:', data);
                 
                 if (data.success) {
                     updatePrintModeButton(data.isTestMode);
@@ -2182,12 +2201,19 @@
                         ? 'Switched to TEST MODE - Tags will be logged to file' 
                         : 'Switched to PRODUCTION MODE - Physical printing enabled';
                     addActivityLog(modeText);
+                    
+                    console.log('✓ Print mode toggled successfully:', data.isTestMode ? 'TEST' : 'PRODUCTION');
                 } else {
-                    addActivityLog('Failed to change print mode: ' + (data.message || 'Unknown error'));
+                    const errorMsg = 'Failed to change print mode: ' + (data.message || 'Unknown error');
+                    console.error('✗', errorMsg);
+                    addActivityLog(errorMsg);
+                    alert(errorMsg);
                 }
             } catch (error) {
                 console.error('Error toggling print mode:', error);
-                addActivityLog('Error changing print mode: ' + error.message);
+                const errorMsg = 'Error changing print mode: ' + error.message;
+                addActivityLog(errorMsg);
+                alert(errorMsg);
             } finally {
                 btn.disabled = false;
             }

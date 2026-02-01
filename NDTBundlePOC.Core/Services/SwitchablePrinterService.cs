@@ -50,13 +50,15 @@ namespace NDTBundlePOC.Core.Services
                 if (isTestMode)
                 {
                     // Test Mode: Log to file
-                    _logger?.LogDebug($"Printing in TEST MODE: {printData.BundleNo}");
+                    _logger?.LogInformation($"🖨️ TEST MODE: Logging tag to file - Bundle: {printData.BundleNo}");
+                    Console.WriteLine($"🖨️ TEST MODE: Logging tag to file - Bundle: {printData.BundleNo}");
                     return _loggingPrinter.PrintNDTBundleTag(printData);
                 }
                 else
                 {
                     // Production Mode: Physical printing
-                    _logger?.LogDebug($"Printing in PRODUCTION MODE: {printData.BundleNo}");
+                    _logger?.LogInformation($"🖨️ PRODUCTION MODE: Sending to physical printer - Bundle: {printData.BundleNo}");
+                    Console.WriteLine($"🖨️ PRODUCTION MODE: Sending to physical printer - Bundle: {printData.BundleNo}");
                     return _physicalPrinter.PrintNDTBundleTag(printData);
                 }
             }

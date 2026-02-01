@@ -30,10 +30,11 @@ using NDTBundlePOC.UI.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure JSON serialization to preserve property names
+// Configure JSON serialization
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
-    options.SerializerOptions.PropertyNamingPolicy = null; // Preserve original property names
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase; // Use camelCase for JSON
+    options.SerializerOptions.PropertyNameCaseInsensitive = true; // Allow case-insensitive property matching
 });
 
 // ============================================
@@ -749,14 +750,19 @@ app.MapGet("/api/print-mode", (IPrintModeService printModeService) =>
 {
     try
     {
+        bool isTestMode = printModeService.IsTestMode;
+        string description = printModeService.GetCurrentModeDescription();
+        Console.WriteLine($"📊 Print Mode Status Request: isTestMode = {isTestMode}, Description = {description}");
+        
         return Results.Ok(new 
         { 
-            isTestMode = printModeService.IsTestMode,
-            description = printModeService.GetCurrentModeDescription()
+            isTestMode = isTestMode,
+            description = description
         });
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"✗ Error in GET /api/print-mode: {ex.Message}");
         return Results.BadRequest(new { success = false, message = ex.Message });
     }
 });
@@ -765,17 +771,25 @@ app.MapPost("/api/print-mode", (IPrintModeService printModeService, PrintModeReq
 {
     try
     {
+        Console.WriteLine($"🔄 Print Mode Toggle Request: Setting TestMode = {request.TestMode}");
+        bool previousMode = printModeService.IsTestMode;
         bool success = printModeService.SetTestMode(request.TestMode);
+        bool currentMode = printModeService.IsTestMode;
+        
+        Console.WriteLine($"✓ Print Mode Updated: {previousMode} → {currentMode}");
+        
         return Results.Ok(new 
         { 
             success = success,
-            isTestMode = printModeService.IsTestMode,
+            isTestMode = currentMode,
             description = printModeService.GetCurrentModeDescription(),
             message = request.TestMode ? "Switched to TEST MODE (logging only)" : "Switched to PRODUCTION MODE (physical printing)"
         });
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"✗ Error in /api/print-mode: {ex.Message}");
+        Console.WriteLine($"  Stack trace: {ex.StackTrace}");
         return Results.BadRequest(new { success = false, message = ex.Message });
     }
 });
