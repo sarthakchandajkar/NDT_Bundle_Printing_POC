@@ -352,6 +352,55 @@ namespace NDTBundlePOC.Core.Services
             }
         }
 
+        /// <summary>
+        /// Close all partial bundles (Status = 1) for a given PO when PO is complete
+        /// </summary>
+        public void ClosePartialBundlesForPO(int poPlanId)
+        {
+            try
+            {
+                var activeBundles = _repository.GetNDTBundles()
+                    .Where(b => b.PO_Plan_ID == poPlanId && b.Status == 1)
+                    .ToList();
+
+                foreach (var bundle in activeBundles)
+                {
+                    bundle.Status = 2; // Completed
+                    bundle.BundleEndTime = DateTime.Now;
+                    bundle.IsFullBundle = false; // Partial bundle
+                    _repository.UpdateNDTBundle(bundle);
+                    Console.WriteLine($"📦 NDT BUNDLE COMPLETED (PO End): {bundle.Bundle_No} | Pieces: {bundle.NDT_Pcs} | Batch: {bundle.Batch_No ?? "N/A"} | Type: Partial (PO Complete) | Status: Ready for printing");
+                }
+
+                if (activeBundles.Count > 0)
+                {
+                    Console.WriteLine($"✅ Closed {activeBundles.Count} partial NDT bundle(s) for PO Plan ID {poPlanId} (PO complete - all pipes processed)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error closing partial NDT bundles for PO {poPlanId}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get total NDT pipes processed for a PO (sum of all bundles)
+        /// </summary>
+        public int GetTotalNDTPipesProcessed(int poPlanId)
+        {
+            try
+            {
+                return _repository.GetNDTBundles()
+                    .Where(b => b.PO_Plan_ID == poPlanId)
+                    .Sum(b => b.NDT_Pcs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error getting total NDT pipes processed for PO {poPlanId}: {ex.Message}");
+                return 0;
+            }
+        }
+
         public void MarkBundleAsPrinted(int bundleId)
         {
             var bundle = _repository.GetNDTBundle(bundleId);

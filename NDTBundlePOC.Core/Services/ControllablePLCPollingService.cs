@@ -29,6 +29,7 @@ namespace NDTBundlePOC.Core.Services
         private readonly ExcelExportService _excelService;
         private readonly ILogger<ControllablePLCPollingService> _logger;
         private readonly IPipeCountingActivityService _activityService;
+        private readonly IDataRepository _repository;
         private readonly int _millId;
         private readonly int _pollingIntervalMs;
         private readonly bool _bypassOKBundlePLCConditions; // For testing: bypass PLC signal requirements
@@ -68,6 +69,7 @@ namespace NDTBundlePOC.Core.Services
             ExcelExportService excelService,
             ILogger<ControllablePLCPollingService> logger,
             IPipeCountingActivityService activityService,
+            IDataRepository repository,
             int millId = 1,
             int pollingIntervalMs = 1000,
             bool bypassOKBundlePLCConditions = true) // Default to true for testing
@@ -79,6 +81,7 @@ namespace NDTBundlePOC.Core.Services
             _excelService = excelService;
             _logger = logger;
             _activityService = activityService;
+            _repository = repository;
             _millId = millId;
             _pollingIntervalMs = pollingIntervalMs;
             _bypassOKBundlePLCConditions = bypassOKBundlePLCConditions;
@@ -273,6 +276,9 @@ namespace NDTBundlePOC.Core.Services
                         {
                             CheckAndPrintOKBundles();
                             CheckAndPrintNDTBundles();
+                            
+                            // Check if PO is complete (all pipes processed) and close partial bundles
+                            CheckAndClosePartialBundlesIfPOComplete(currentOKCuts, currentNDTCuts);
                             
                             // Log summary periodically (every 10 cycles)
                             if ((_totalOKTagsPrinted + _totalNDTTagsPrinted) > 0 && 
@@ -496,6 +502,48 @@ namespace NDTBundlePOC.Core.Services
             catch (Exception ex)
             {
                 _logger?.LogError(ex, $"Unexpected error in CheckAndPrintNDTBundles: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Check if PO is complete (all pipes processed) and close any partial bundles
+        /// PO is complete when: Total OK pipes processed = PLC OK count AND Total NDT pipes processed = PLC NDT count
+        /// </summary>
+        private void CheckAndClosePartialBundlesIfPOComplete(int currentOKCuts, int currentNDTCuts)
+        {
+            try
+            {
+                // Get active PO
+                var activeSlit = _repository?.GetActiveSlit(0);
+                if (activeSlit == null) return;
+
+                var poPlan = _repository?.GetPOPlan(activeSlit.PO_Plan_ID);
+                if (poPlan == null) return;
+
+                // Get total pipes processed for this PO
+                int totalOKProcessed = _okBundleService.GetTotalOKPipesProcessed(poPlan.PO_Plan_ID);
+                int totalNDTProcessed = _ndtBundleService.GetTotalNDTPipesProcessed(poPlan.PO_Plan_ID);
+
+                // Check if all pipes are processed
+                bool allOKProcessed = totalOKProcessed >= currentOKCuts;
+                bool allNDTProcessed = totalNDTProcessed >= currentNDTCuts;
+
+                if (allOKProcessed && allNDTProcessed && (totalOKProcessed > 0 || totalNDTProcessed > 0))
+                {
+                    // PO is complete - close any partial bundles
+                    _logger?.LogInformation($"✅ PO Complete Detected: OK={totalOKProcessed}/{currentOKCuts}, NDT={totalNDTProcessed}/{currentNDTCuts}. Closing partial bundles...");
+                    
+                    _okBundleService.ClosePartialBundlesForPO(poPlan.PO_Plan_ID);
+                    _ndtBundleService.ClosePartialBundlesForPO(poPlan.PO_Plan_ID);
+                    
+                    // After closing partial bundles, check for printing again
+                    CheckAndPrintOKBundles();
+                    CheckAndPrintNDTBundles();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Error checking PO completion: {ex.Message}");
             }
         }
 

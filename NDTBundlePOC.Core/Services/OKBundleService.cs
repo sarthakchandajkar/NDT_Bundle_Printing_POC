@@ -18,6 +18,12 @@ namespace NDTBundlePOC.Core.Services
         void MarkBundleAsPrinted(int bundleId);
         OKBundlePrintData GetBundlePrintData(int bundleId);
         bool PrintBundleTag(int bundleId, IPrinterService printerService, ExcelExportService excelService, IPLCService plcService = null);
+        
+        // Close partial bundles when PO is complete
+        void ClosePartialBundlesForPO(int poPlanId);
+        
+        // Get total OK pipes processed for a PO
+        int GetTotalOKPipesProcessed(int poPlanId);
     }
 
     public class OKBundlePrintData
@@ -291,6 +297,55 @@ namespace NDTBundlePOC.Core.Services
             return GetOKBundles()
                 .OrderByDescending(b => b.BundleStartTime)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Close all partial bundles (Status = 1) for a given PO when PO is complete
+        /// </summary>
+        public void ClosePartialBundlesForPO(int poPlanId)
+        {
+            try
+            {
+                var activeBundles = GetOKBundles()
+                    .Where(b => b.PO_Plan_ID == poPlanId && b.Status == 1)
+                    .ToList();
+
+                foreach (var bundle in activeBundles)
+                {
+                    bundle.Status = 2; // Completed
+                    bundle.BundleEndTime = DateTime.Now;
+                    bundle.IsFullBundle = false; // Partial bundle
+                    UpdateOKBundle(bundle);
+                    Console.WriteLine($"📦 OK BUNDLE COMPLETED (PO End): {bundle.Bundle_No} | Pieces: {bundle.OK_Pcs} | Type: Partial (PO Complete) | Status: Ready for printing");
+                }
+
+                if (activeBundles.Count > 0)
+                {
+                    Console.WriteLine($"✅ Closed {activeBundles.Count} partial OK bundle(s) for PO Plan ID {poPlanId} (PO complete - all pipes processed)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error closing partial OK bundles for PO {poPlanId}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get total OK pipes processed for a PO (sum of all bundles)
+        /// </summary>
+        public int GetTotalOKPipesProcessed(int poPlanId)
+        {
+            try
+            {
+                return GetOKBundles()
+                    .Where(b => b.PO_Plan_ID == poPlanId)
+                    .Sum(b => b.OK_Pcs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Error getting total OK pipes processed for PO {poPlanId}: {ex.Message}");
+                return 0;
+            }
         }
 
         public void MarkBundleAsPrinted(int bundleId)

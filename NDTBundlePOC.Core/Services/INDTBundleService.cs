@@ -26,6 +26,12 @@ namespace NDTBundlePOC.Core.Services
         
         // Print bundle tag (with PLC integration)
         bool PrintBundleTag(int bundleId, IPrinterService printerService, ExcelExportService excelService, IPLCService plcService = null);
+        
+        // Close partial bundles when PO is complete
+        void ClosePartialBundlesForPO(int poPlanId);
+        
+        // Get total NDT pipes processed for a PO
+        int GetTotalNDTPipesProcessed(int poPlanId);
     }
     
     public class NDTBundlePrintData

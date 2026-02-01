@@ -155,6 +155,7 @@ builder.Services.AddSingleton<IControllablePLCPollingService>(sp =>
     var printerService = sp.GetRequiredService<IPrinterService>();
     var excelService = sp.GetRequiredService<ExcelExportService>();
     var activityService = sp.GetRequiredService<IPipeCountingActivityService>();
+    var repository = sp.GetRequiredService<IDataRepository>();
     var logger = sp.GetRequiredService<ILogger<ControllablePLCPollingService>>();
     
     return new ControllablePLCPollingService(
@@ -165,6 +166,7 @@ builder.Services.AddSingleton<IControllablePLCPollingService>(sp =>
         excelService,
         logger,
         activityService,
+        repository,
         millId,
         pollingIntervalMs,
         bypassOKBundlePLCConditions
