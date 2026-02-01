@@ -310,8 +310,13 @@ namespace NDTBundlePOC.Core.Services
         {
             try
             {
+                // Only return full bundles (IsFullBundle = true) for printing
+                // Partial bundles are only printed when PO ends (they are explicitly marked as ready)
+                // For Case 1: 30 NDT pipes with PcsPerBundle=13 should create:
+                //   - 2 full bundles (13+13) → Status=2, IsFullBundle=true → PRINT
+                //   - 1 partial bundle (4) → Status=1, IsFullBundle=false → DON'T PRINT (until PO ends)
                 return _repository.GetNDTBundles()
-                    .Where(b => b.Status == 2) // Completed but not printed
+                    .Where(b => b.Status == 2 && b.IsFullBundle == true) // Only full bundles ready for printing
                     .ToList();
             }
             catch (Exception ex)

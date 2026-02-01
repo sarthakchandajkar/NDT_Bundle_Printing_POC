@@ -516,11 +516,17 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
             if (activeSlit != null)
             {
                 activePOPlanId = activeSlit.PO_Plan_ID;
+                Console.WriteLine($"→ Active PO Plan ID for filtering: {activePOPlanId}");
+            }
+            else
+            {
+                Console.WriteLine($"⚠ No active slit found - scenario-specific counts will be 0");
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors when getting active slit
+            Console.WriteLine($"⚠ Error getting active slit for filtering: {ex.Message}");
+            // Ignore errors when getting active slit - will use global counts as fallback
         }
         
         // Filter bundles by active PO Plan ID for scenario-specific counts
@@ -630,7 +636,7 @@ app.MapGet("/api/pipe-counting-activity", (IPipeCountingActivityServiceExtended 
 });
 
 // Test Scenario Management API endpoints
-app.MapPost("/api/test-scenarios/activate/{scenarioName}", async (IDataRepository repository, IConfiguration configuration, string scenarioName) =>
+app.MapPost("/api/test-scenarios/activate/{scenarioName}", async (IDataRepository repository, IConfiguration configuration, IControllablePLCPollingService pollingService, string scenarioName) =>
 {
     try
     {
@@ -740,6 +746,9 @@ app.MapPost("/api/test-scenarios/activate/{scenarioName}", async (IDataRepositor
                 }
             }
         }
+
+        // Reset previous cut counts in polling service so new scenario will detect current counts as new cuts
+        pollingService?.ResetPreviousCounts();
 
         return Results.Ok(new 
         { 
