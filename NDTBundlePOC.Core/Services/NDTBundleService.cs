@@ -266,42 +266,60 @@ namespace NDTBundlePOC.Core.Services
 
         private string CreateNewNDTBundle(int poPlanId, int slitId, string batchNo)
         {
+            // Get PO Plan to retrieve Shop_ID
+            var poPlan = _repository.GetPOPlan(poPlanId);
+            int shopId = poPlan?.Shop_ID ?? 1; // Default to 1 if not specified
+            
             var bundles = _repository.GetNDTBundles();
             string bundleNo;
+            string yearPrefix = DateTime.Now.ToString("yy");
+            string shopIdStr = shopId.ToString("D2"); // Format as 2 digits (01, 02, etc.)
+            
+            // New format: 0 + YY + ShopID + Sequential (5 digits)
+            // Example: 0261000001, 0261000002, etc.
+            // Format: 0YY01XXXXX (10 characters total)
             
             if (bundles.Any())
             {
                 var lastBundle = bundles.OrderByDescending(b => b.BundleStartTime).First();
-                string yearPrefix = DateTime.Now.ToString("yy");
-                if (lastBundle.Bundle_No != null && lastBundle.Bundle_No.StartsWith(yearPrefix))
+                
+                // Check if last bundle follows the new format (starts with 0, then YY)
+                if (lastBundle.Bundle_No != null && lastBundle.Bundle_No.Length == 10 && lastBundle.Bundle_No.StartsWith("0"))
                 {
-                    // Format: YY1NDT0001, extract number from position 6
-                    if (lastBundle.Bundle_No.Length >= 10)
+                    // Extract year and shop ID from last bundle
+                    string lastYear = lastBundle.Bundle_No.Substring(1, 2);
+                    string lastShopId = lastBundle.Bundle_No.Substring(3, 2);
+                    
+                    // If same year and shop, increment sequence
+                    if (lastYear == yearPrefix && lastShopId == shopIdStr)
                     {
-                        string numPart = lastBundle.Bundle_No.Substring(6);
+                        string numPart = lastBundle.Bundle_No.Substring(5); // Last 5 digits
                         if (int.TryParse(numPart, out int bundleNum))
                         {
                             bundleNum++;
-                            bundleNo = $"{yearPrefix}1NDT{bundleNum:D4}";
+                            bundleNo = $"0{yearPrefix}{shopIdStr}{bundleNum:D5}";
                         }
                         else
                         {
-                            bundleNo = $"{yearPrefix}1NDT{1:D4}";
+                            bundleNo = $"0{yearPrefix}{shopIdStr}{1:D5}";
                         }
                     }
                     else
                     {
-                        bundleNo = $"{yearPrefix}1NDT{1:D4}";
+                        // Different year or shop, start from 1
+                        bundleNo = $"0{yearPrefix}{shopIdStr}{1:D5}";
                     }
                 }
                 else
                 {
-                    bundleNo = $"{yearPrefix}1NDT{1:D4}";
+                    // Old format or invalid, start new sequence
+                    bundleNo = $"0{yearPrefix}{shopIdStr}{1:D5}";
                 }
             }
             else
             {
-                bundleNo = $"{DateTime.Now:yy}1NDT{1:D4}";
+                // First bundle ever
+                bundleNo = $"0{yearPrefix}{shopIdStr}{1:D5}";
             }
 
             var newBundle = new NDTBundle

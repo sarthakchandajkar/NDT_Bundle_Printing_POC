@@ -84,28 +84,32 @@ builder.Services.AddSingleton<IOKBundleService>(sp =>
 // PLC service is registered above with bundle services
 
 // Printer Service Configuration
-// TEST MODE: Use LoggingPrinterService to log tags instead of printing (for testing/verification)
-// PRODUCTION MODE: Use HoneywellPD45SPrinterService for actual physical printing
+// Use SwitchablePrinterService to allow dynamic switching between test mode and production mode
+builder.Services.AddSingleton<IPrintModeService>(sp => 
+    new PrintModeService(
+        sp.GetRequiredService<ILogger<PrintModeService>>(),
+        initialTestMode: useTestMode
+    ));
+
+// Register switchable printer service that wraps both logging and physical printers
+builder.Services.AddSingleton<IPrinterService>(sp => 
+    new SwitchablePrinterService(
+        sp.GetRequiredService<IPrintModeService>(),
+        sp.GetRequiredService<ILogger<SwitchablePrinterService>>(),
+        logFilePath: null, // Use default log path
+        printerAddress: printerAddress,
+        printerPort: printerPort,
+        useNetwork: useNetwork
+    ));
+
+Console.WriteLine($"→ Print Mode Service: Initial mode = {(useTestMode ? "TEST MODE (Logging)" : "PRODUCTION MODE (Physical Printing)")}");
+Console.WriteLine($"  → Use UI button to toggle between modes");
 if (useTestMode)
 {
-    // Test Mode: Log all print attempts to file (no physical printing)
-    builder.Services.AddSingleton<IPrinterService>(sp => 
-        new LoggingPrinterService());
-    Console.WriteLine("⚠ TEST MODE ENABLED: Tags will be logged to file instead of printing");
     Console.WriteLine($"  → Log file location: {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NDT_Bundle_POC_PrintLogs")}");
 }
 else
 {
-    // Production Mode: Use actual printer
-    // Use ZPL-based printing for Honeywell PD45S printer (sends ZPL commands directly to printer)
-    // Hardcoded values: IP=192.168.0.125, Port=9100, Network=true
-    builder.Services.AddSingleton<IPrinterService>(sp => 
-        new HoneywellPD45SPrinterService(
-            printerAddress: printerAddress,  // Hardcoded: 192.168.0.125
-            printerPort: printerPort,        // Hardcoded: 9100
-            useNetwork: useNetwork           // Hardcoded: true (Ethernet)
-        ));
-    Console.WriteLine("✓ PRODUCTION MODE: Physical printing enabled");
     Console.WriteLine($"  → Printer: {printerAddress}:{printerPort}");
 }
 
@@ -740,6 +744,42 @@ app.MapPost("/api/plc/polling/stop", async (IControllablePLCPollingService polli
 });
 
 // Test print endpoint with dummy data using mock Rpt_MillLabel design
+// Print Mode Management endpoints
+app.MapGet("/api/print-mode", (IPrintModeService printModeService) =>
+{
+    try
+    {
+        return Results.Ok(new 
+        { 
+            isTestMode = printModeService.IsTestMode,
+            description = printModeService.GetCurrentModeDescription()
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapPost("/api/print-mode", (IPrintModeService printModeService, bool testMode) =>
+{
+    try
+    {
+        bool success = printModeService.SetTestMode(testMode);
+        return Results.Ok(new 
+        { 
+            success = success,
+            isTestMode = printModeService.IsTestMode,
+            description = printModeService.GetCurrentModeDescription(),
+            message = testMode ? "Switched to TEST MODE (logging only)" : "Switched to PRODUCTION MODE (physical printing)"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
 app.MapPost("/api/test-print", (IPrinterService printerService) =>
 {
     try

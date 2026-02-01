@@ -965,6 +965,7 @@
             <div class="filter-actions" style="width: 100%; justify-content: flex-start; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-success" onclick="openPOPlanManagement()" style="min-width: 140px; font-weight: bold;">Manage PO Plans</button>
                 <button class="btn btn-success" id="btnPLCPolling" onclick="togglePLCPolling()" style="min-width: 140px; font-weight: bold;">Start PLC Polling</button>
+                <button class="btn btn-warning" id="btnPrintMode" onclick="togglePrintMode()" style="min-width: 180px; font-weight: bold;">Print Mode: Loading...</button>
                 <button class="btn btn-primary-bold" onclick="printSelectedBundles(false)">Print Bundles</button>
                 <button class="btn btn-primary" onclick="showViewLog()">View Log</button>
                 <input type="text" id="txtSearch" class="search-box" placeholder="Search bundles..." oninput="applyFilters()" style="margin-left: auto;">
@@ -1137,6 +1138,8 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            // Load print mode status on page load
+            loadPrintMode();
             updateDateTime();
             setInterval(updateDateTime, 1000);
             
@@ -2117,6 +2120,78 @@
 
         // PLC Polling Control Functions
         let isPollingActive = false;
+
+        // Print Mode Toggle Functions
+        async function loadPrintMode() {
+            try {
+                const response = await fetch('/api/print-mode');
+                const data = await response.json();
+                updatePrintModeButton(data.isTestMode);
+            } catch (error) {
+                console.error('Error loading print mode:', error);
+                updatePrintModeButton(true); // Default to test mode on error
+            }
+        }
+
+        function updatePrintModeButton(isTestMode) {
+            const btn = document.getElementById('btnPrintMode');
+            if (btn) {
+                if (isTestMode) {
+                    btn.textContent = '🖨️ Print Mode: TEST (Logging)';
+                    btn.className = 'btn btn-warning';
+                    btn.title = 'Click to switch to PRODUCTION MODE (Physical Printing)';
+                } else {
+                    btn.textContent = '🖨️ Print Mode: PRODUCTION';
+                    btn.className = 'btn btn-danger';
+                    btn.title = 'Click to switch to TEST MODE (Logging Only)';
+                }
+            }
+        }
+
+        async function togglePrintMode() {
+            const btn = document.getElementById('btnPrintMode');
+            if (!btn) return;
+
+            // Get current mode
+            try {
+                const currentResponse = await fetch('/api/print-mode');
+                const currentData = await response.json();
+                const newMode = !currentData.isTestMode;
+
+                // Disable button during toggle
+                btn.disabled = true;
+                btn.textContent = 'Switching...';
+
+                // Toggle mode
+                const response = await fetch('/api/print-mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(newMode)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    updatePrintModeButton(data.isTestMode);
+                    addActivityLog(data.message);
+                    
+                    // Show notification using activity log
+                    const modeText = data.isTestMode 
+                        ? 'Switched to TEST MODE - Tags will be logged to file' 
+                        : 'Switched to PRODUCTION MODE - Physical printing enabled';
+                    addActivityLog(modeText);
+                } else {
+                    addActivityLog('Failed to change print mode: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error toggling print mode:', error);
+                addActivityLog('Error changing print mode: ' + error.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
 
         async function togglePLCPolling() {
             const btn = document.getElementById('btnPLCPolling');
