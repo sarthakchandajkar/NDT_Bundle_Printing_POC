@@ -1622,16 +1622,35 @@
 
         // System Status Monitoring Functions
         async function refreshSystemStatus() {
+            const refreshBtn = document.querySelector('.system-monitor-header .refresh-btn');
+            const originalText = refreshBtn ? refreshBtn.textContent : 'Refresh';
+            
+            // Disable button and show loading state
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'Refreshing...';
+                refreshBtn.style.opacity = '0.6';
+            }
+            
             try {
                 // Get comprehensive system status
                 const response = await fetch('/api/system-status');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 // Update PLC Status
-                updatePLCStatusDisplay(data.plc);
+                if (data.plc) {
+                    updatePLCStatusDisplay(data.plc);
+                }
                 
                 // Update Printer Status
-                updatePrinterStatusDisplay(data.printer);
+                if (data.printer) {
+                    updatePrinterStatusDisplay(data.printer);
+                }
                 
                 // Update Current Pipe Counts (from PLC)
                 if (data.pipeCounts) {
@@ -1640,9 +1659,11 @@
                 }
                 
                 // Update NDT Bundle Statistics
-                document.getElementById('totalNDTInBundles').textContent = data.ndtCounts.totalPipes || 0;
-                document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated || 0;
-                document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted || 0;
+                if (data.ndtCounts) {
+                    document.getElementById('totalNDTInBundles').textContent = data.ndtCounts.totalPipes || 0;
+                    document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated || 0;
+                    document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted || 0;
+                }
                 
                 // Update OK Bundle Statistics
                 if (data.okCounts) {
@@ -1652,29 +1673,77 @@
                 }
                 
                 // Update Bundle Status
-                document.getElementById('activeBundles').textContent = data.bundleStatus.active || 0;
-                document.getElementById('readyBundles').textContent = data.bundleStatus.ready || 0;
-                document.getElementById('printedBundles').textContent = data.bundleStatus.printed || 0;
+                if (data.bundleStatus) {
+                    document.getElementById('activeBundles').textContent = data.bundleStatus.active || 0;
+                    document.getElementById('readyBundles').textContent = data.bundleStatus.ready || 0;
+                    document.getElementById('printedBundles').textContent = data.bundleStatus.printed || 0;
+                }
                 
-                addActivityLog('System status refreshed');
+                addActivityLog('✓ System status refreshed successfully');
+                
+                // Show success feedback
+                if (refreshBtn) {
+                    refreshBtn.textContent = '✓ Refreshed';
+                    setTimeout(() => {
+                        refreshBtn.textContent = originalText;
+                    }, 1000);
+                }
             } catch (error) {
                 console.error('Error refreshing system status:', error);
-                addActivityLog('Error refreshing system status: ' + error.message);
+                addActivityLog('✗ Error refreshing system status: ' + error.message);
+                
+                // Show error feedback
+                if (refreshBtn) {
+                    refreshBtn.textContent = '✗ Error';
+                    refreshBtn.style.color = '#dc3545';
+                    setTimeout(() => {
+                        refreshBtn.textContent = originalText;
+                        refreshBtn.style.color = '';
+                    }, 2000);
+                }
+                
                 // Fallback to individual checks
-                await Promise.all([
-                    checkPLCStatus(),
-                    checkPrinterStatus(),
-                    updateNDTCounts(),
-                    updateOKCounts(),
-                    updateBundleStatus()
-                ]);
+                try {
+                    await Promise.all([
+                        checkPLCStatus(),
+                        checkPrinterStatus(),
+                        updateNDTCounts(),
+                        updateOKCounts(),
+                        updateBundleStatus()
+                    ]);
+                } catch (fallbackError) {
+                    console.error('Fallback checks also failed:', fallbackError);
+                }
+            } finally {
+                // Re-enable button
+                if (refreshBtn) {
+                    setTimeout(() => {
+                        refreshBtn.disabled = false;
+                        refreshBtn.style.opacity = '1';
+                    }, 500);
+                }
             }
         }
 
         // Pipe Counting Activity Functions
         async function refreshPipeActivity() {
+            const refreshBtn = document.querySelector('.pipe-counting-activity-header .refresh-btn');
+            const originalText = refreshBtn ? refreshBtn.textContent : 'Refresh';
+            
+            // Disable button and show loading state
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'Refreshing...';
+                refreshBtn.style.opacity = '0.6';
+            }
+            
             try {
                 const response = await fetch('/api/pipe-counting-activity');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 updatePipeActivityTable(data.activities || []);
@@ -1684,9 +1753,37 @@
                     document.getElementById('currentOKCount').textContent = data.currentCounts.okCuts || 0;
                     document.getElementById('currentNDTCount').textContent = data.currentCounts.ndtCuts || 0;
                 }
+                
+                addActivityLog('✓ Pipe activity refreshed successfully');
+                
+                // Show success feedback
+                if (refreshBtn) {
+                    refreshBtn.textContent = '✓ Refreshed';
+                    setTimeout(() => {
+                        refreshBtn.textContent = originalText;
+                    }, 1000);
+                }
             } catch (error) {
                 console.error('Error refreshing pipe activity:', error);
-                addActivityLog('Error refreshing pipe activity: ' + error.message);
+                addActivityLog('✗ Error refreshing pipe activity: ' + error.message);
+                
+                // Show error feedback
+                if (refreshBtn) {
+                    refreshBtn.textContent = '✗ Error';
+                    refreshBtn.style.color = '#dc3545';
+                    setTimeout(() => {
+                        refreshBtn.textContent = originalText;
+                        refreshBtn.style.color = '';
+                    }, 2000);
+                }
+            } finally {
+                // Re-enable button
+                if (refreshBtn) {
+                    setTimeout(() => {
+                        refreshBtn.disabled = false;
+                        refreshBtn.style.opacity = '1';
+                    }, 500);
+                }
             }
         }
 
