@@ -761,17 +761,17 @@ app.MapGet("/api/print-mode", (IPrintModeService printModeService) =>
     }
 });
 
-app.MapPost("/api/print-mode", (IPrintModeService printModeService, bool testMode) =>
+app.MapPost("/api/print-mode", (IPrintModeService printModeService, PrintModeRequest request) =>
 {
     try
     {
-        bool success = printModeService.SetTestMode(testMode);
+        bool success = printModeService.SetTestMode(request.TestMode);
         return Results.Ok(new 
         { 
             success = success,
             isTestMode = printModeService.IsTestMode,
             description = printModeService.GetCurrentModeDescription(),
-            message = testMode ? "Switched to TEST MODE (logging only)" : "Switched to PRODUCTION MODE (physical printing)"
+            message = request.TestMode ? "Switched to TEST MODE (logging only)" : "Switched to PRODUCTION MODE (physical printing)"
         });
     }
     catch (Exception ex)
