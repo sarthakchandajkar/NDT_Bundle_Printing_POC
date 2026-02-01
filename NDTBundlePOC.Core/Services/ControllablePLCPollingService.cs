@@ -18,7 +18,6 @@ namespace NDTBundlePOC.Core.Services
         bool Stop();
         Task<bool> StartAsync();
         Task<bool> StopAsync();
-        void ResetPreviousCounts(); // Reset previous cut counts (useful when switching test scenarios)
     }
 
     public class ControllablePLCPollingService : IControllablePLCPollingService
@@ -588,14 +587,6 @@ namespace NDTBundlePOC.Core.Services
             {
                 _logger?.LogError(ex, "Error processing NDT bundle print");
             }
-        }
-
-        public void ResetPreviousCounts()
-        {
-            _previousOKCuts = 0;
-            _previousNDTCuts = 0;
-            _isInitialized = false;
-            _logger?.LogInformation("✓ Reset previous cut counts - next polling cycle will treat current counts as new");
         }
     }
 }

@@ -7,8 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
-using Npgsql;
 using NDTBundlePOC.Core.Models;
 using NDTBundlePOC.Core.Services;
 using NDTBundlePOC.UI.Web.Hubs;
@@ -491,57 +489,21 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
 });
 
 // System status endpoint
-app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IOKBundleService okBundleService, IPipeCountingActivityServiceExtended activityService, IDataRepository repository) =>
+app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IOKBundleService okBundleService, IPipeCountingActivityServiceExtended activityService) =>
 {
     try
     {
-        // Get bundles with null-safe handling
-        var ndtBundles = ndtBundleService?.GetAllNDTBundles() ?? new List<NDTBundle>();
-        var ndtReadyBundles = ndtBundleService?.GetBundlesReadyForPrinting() ?? new List<NDTBundle>();
-        var okBundles = okBundleService?.GetAllOKBundles() ?? new List<OKBundle>();
-        var okReadyBundles = okBundleService?.GetBundlesReadyForPrinting() ?? new List<OKBundle>();
+        var ndtBundles = ndtBundleService.GetAllNDTBundles();
+        var ndtReadyBundles = ndtBundleService.GetBundlesReadyForPrinting();
+        var okBundles = okBundleService.GetAllOKBundles();
+        var okReadyBundles = okBundleService.GetBundlesReadyForPrinting();
         var (okCuts, ndtCuts) = activityService?.GetCurrentCounts() ?? (0, 0);
-        
-        // Ensure bundles are not null before using LINQ operations
-        if (ndtBundles == null) ndtBundles = new List<NDTBundle>();
-        if (okBundles == null) okBundles = new List<OKBundle>();
-        if (ndtReadyBundles == null) ndtReadyBundles = new List<NDTBundle>();
-        if (okReadyBundles == null) okReadyBundles = new List<OKBundle>();
-        
-        // Get active PO Plan ID for filtering scenario-specific counts
-        int? activePOPlanId = null;
-        try
-        {
-            var activeSlit = repository?.GetActiveSlit(0);
-            if (activeSlit != null)
-            {
-                activePOPlanId = activeSlit.PO_Plan_ID;
-                Console.WriteLine($"→ Active PO Plan ID for filtering: {activePOPlanId}");
-            }
-            else
-            {
-                Console.WriteLine($"⚠ No active slit found - scenario-specific counts will be 0");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠ Error getting active slit for filtering: {ex.Message}");
-            // Ignore errors when getting active slit - will use global counts as fallback
-        }
-        
-        // Filter bundles by active PO Plan ID for scenario-specific counts
-        var activeNDTBundles = activePOPlanId.HasValue 
-            ? ndtBundles.Where(b => b?.PO_Plan_ID == activePOPlanId.Value).ToList()
-            : new List<NDTBundle>();
-        var activeOKBundles = activePOPlanId.HasValue 
-            ? okBundles.Where(b => b?.PO_Plan_ID == activePOPlanId.Value).ToList()
-            : new List<OKBundle>();
         
         return Results.Ok(new
         {
             plc = new
             {
-                connected = plcService?.IsConnected ?? false,
+                connected = plcService.IsConnected,
                 ipAddress = "192.168.0.13",
                 rack = 0,
                 slot = 2
@@ -559,47 +521,27 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
             },
             ndtCounts = new
             {
-                totalPipes = ndtBundles.Sum(b => b?.NDT_Pcs ?? 0),
+                totalPipes = ndtBundles.Sum(b => b.NDT_Pcs),
                 bundlesCreated = ndtBundles.Count,
-                tagsPrinted = ndtBundles.Count(b => b?.Status == 3)
+                tagsPrinted = ndtBundles.Count(b => b.Status == 3)
             },
             okCounts = new
             {
-                totalPipes = okBundles.Sum(b => b?.OK_Pcs ?? 0),
+                totalPipes = okBundles.Sum(b => b.OK_Pcs),
                 bundlesCreated = okBundles.Count,
-                tagsPrinted = okBundles.Count(b => b?.Status == 3)
-            },
-            // Scenario-specific counts (filtered by active PO Plan)
-            activeScenarioCounts = new
-            {
-                ndtTagsPrinted = activeNDTBundles.Count(b => b?.Status == 3),
-                okTagsPrinted = activeOKBundles.Count(b => b?.Status == 3),
-                activePOPlanId = activePOPlanId
+                tagsPrinted = okBundles.Count(b => b.Status == 3)
             },
             bundleStatus = new
             {
-                active = ndtBundles.Count(b => b?.Status == 1) + okBundles.Count(b => b?.Status == 1),
-                ready = (ndtReadyBundles?.Count ?? 0) + (okReadyBundles?.Count ?? 0),
-                printed = ndtBundles.Count(b => b?.Status == 3) + okBundles.Count(b => b?.Status == 3)
+                active = ndtBundles.Count(b => b.Status == 1) + okBundles.Count(b => b.Status == 1),
+                ready = ndtReadyBundles.Count + okReadyBundles.Count,
+                printed = ndtBundles.Count(b => b.Status == 3) + okBundles.Count(b => b.Status == 3)
             }
         });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"✗ Error in /api/system-status endpoint: {ex.Message}");
-        Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
-        
-        // Return a valid response structure even on error, so UI doesn't break
-        return Results.Ok(new
-        {
-            plc = new { connected = false, ipAddress = "192.168.0.13", rack = 0, slot = 2 },
-            printer = new { ipAddress = "192.168.0.125", port = 9100, status = "error" },
-            pipeCounts = new { currentOKCuts = 0, currentNDTCuts = 0 },
-            ndtCounts = new { totalPipes = 0, bundlesCreated = 0, tagsPrinted = 0 },
-            okCounts = new { totalPipes = 0, bundlesCreated = 0, tagsPrinted = 0 },
-            bundleStatus = new { active = 0, ready = 0, printed = 0 },
-            error = ex.Message
-        });
+        return Results.BadRequest(new { success = false, message = ex.Message });
     }
 });
 

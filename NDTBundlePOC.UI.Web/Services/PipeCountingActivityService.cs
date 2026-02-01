@@ -11,11 +11,11 @@ namespace NDTBundlePOC.UI.Web.Services
     public class PipeCountingActivity
     {
         public DateTime Timestamp { get; set; }
-        public string PipeType { get; set; } = string.Empty; // "OK" or "NDT"
+        public string PipeType { get; set; } // "OK" or "NDT"
         public int Count { get; set; }
         public int TotalOKCuts { get; set; }
         public int TotalNDTCuts { get; set; }
-        public string Source { get; set; } = string.Empty; // "PLC" or "Manual"
+        public string Source { get; set; } // "PLC" or "Manual"
     }
 
     public interface IPipeCountingActivityServiceExtended : IPipeCountingActivityService
