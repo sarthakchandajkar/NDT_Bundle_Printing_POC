@@ -345,79 +345,95 @@ namespace NDTBundlePOC.Core.Services
         // Formation Chart - Get by Size (for NDT bundles)
         public NDTBundleFormationChart GetNDTFormationChart(int millId, decimal? pipeSize)
         {
-            using (var conn = GetConnection())
+            return SafeExecute(() =>
             {
-                conn.Open();
-                string query = @"SELECT ""NDTBundleFormationChart_ID"", ""Mill_ID"", ""Pipe_Size"", ""NDT_PcsPerBundle"", ""IsActive""
-                                FROM ""NDT_BundleFormationChart""
-                                WHERE ""Mill_ID"" = @millId AND ""IsActive"" = true";
-                
-                if (pipeSize.HasValue)
+                using (var conn = GetConnection())
                 {
-                    // First try to get size-specific configuration
-                    query += @" AND ""Pipe_Size"" = @pipeSize
-                               ORDER BY ""Pipe_Size"" DESC
-                               LIMIT 1";
-                }
-                else
-                {
-                    // Get default configuration (Pipe_Size IS NULL)
-                    query += @" AND ""Pipe_Size"" IS NULL
-                               LIMIT 1";
-                }
-
-                using (var cmd = new NpgsqlCommand(query, conn))
-                {
-                    cmd.Parameters.AddWithValue("@millId", millId);
+                    conn.Open();
+                    string query = @"SELECT ""NDTBundleFormationChart_ID"", ""Mill_ID"", ""Pipe_Size"", ""NDT_PcsPerBundle"", ""IsActive""
+                                    FROM ""NDT_BundleFormationChart""
+                                    WHERE ""Mill_ID"" = @millId AND ""IsActive"" = true";
+                    
                     if (pipeSize.HasValue)
                     {
-                        cmd.Parameters.AddWithValue("@pipeSize", pipeSize.Value);
+                        // First try to get size-specific configuration
+                        // Use ROUND to handle potential precision differences (e.g., 8.0 vs 8.00)
+                        query = @"SELECT ""NDTBundleFormationChart_ID"", ""Mill_ID"", ""Pipe_Size"", ""NDT_PcsPerBundle"", ""IsActive""
+                                 FROM ""NDT_BundleFormationChart""
+                                 WHERE ""Mill_ID"" = @millId 
+                                   AND ""IsActive"" = true 
+                                   AND ROUND(""Pipe_Size""::numeric, 2) = ROUND(@pipeSize::numeric, 2)
+                                 ORDER BY ""Pipe_Size"" DESC
+                                 LIMIT 1";
                     }
-                    using (var rdr = cmd.ExecuteReader())
+                    else
                     {
-                        if (rdr.Read())
-                        {
-                            return new NDTBundleFormationChart
-                            {
-                                NDTBundleFormationChart_ID = Convert.ToInt32(rdr["NDTBundleFormationChart_ID"]),
-                                Mill_ID = Convert.ToInt32(rdr["Mill_ID"]),
-                                Pipe_Size = rdr["Pipe_Size"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(rdr["Pipe_Size"]),
-                                NDT_PcsPerBundle = Convert.ToInt32(rdr["NDT_PcsPerBundle"]),
-                                IsActive = Convert.ToBoolean(rdr["IsActive"])
-                            };
-                        }
+                        // Get default configuration (Pipe_Size IS NULL)
+                        query += @" AND ""Pipe_Size"" IS NULL
+                                   LIMIT 1";
                     }
-                }
-                
-                // If size-specific not found and pipeSize was provided, fall back to default
-                if (pipeSize.HasValue)
-                {
-                    query = @"SELECT ""NDTBundleFormationChart_ID"", ""Mill_ID"", ""Pipe_Size"", ""NDT_PcsPerBundle"", ""IsActive""
-                             FROM ""NDT_BundleFormationChart""
-                             WHERE ""Mill_ID"" = @millId AND ""IsActive"" = true AND ""Pipe_Size"" IS NULL
-                             LIMIT 1";
-                    
+
                     using (var cmd = new NpgsqlCommand(query, conn))
                     {
                         cmd.Parameters.AddWithValue("@millId", millId);
+                        if (pipeSize.HasValue)
+                        {
+                            cmd.Parameters.AddWithValue("@pipeSize", pipeSize.Value);
+                        }
                         using (var rdr = cmd.ExecuteReader())
                         {
                             if (rdr.Read())
                             {
-                                return new NDTBundleFormationChart
+                                var chart = new NDTBundleFormationChart
                                 {
                                     NDTBundleFormationChart_ID = Convert.ToInt32(rdr["NDTBundleFormationChart_ID"]),
                                     Mill_ID = Convert.ToInt32(rdr["Mill_ID"]),
-                                    Pipe_Size = null,
+                                    Pipe_Size = rdr["Pipe_Size"] == DBNull.Value ? null : (decimal?)Convert.ToDecimal(rdr["Pipe_Size"]),
                                     NDT_PcsPerBundle = Convert.ToInt32(rdr["NDT_PcsPerBundle"]),
                                     IsActive = Convert.ToBoolean(rdr["IsActive"])
                                 };
+                                
+                                Console.WriteLine($"🔍 Database Query Result: Found chart entry - Pipe_Size: {chart.Pipe_Size?.ToString() ?? "NULL"}, NDT_PcsPerBundle: {chart.NDT_PcsPerBundle}");
+                                return chart;
+                            }
+                        }
+                    }
+                    
+                    // If size-specific not found and pipeSize was provided, fall back to default
+                    if (pipeSize.HasValue)
+                    {
+                        Console.WriteLine($"⚠️  Size-specific chart not found for Pipe_Size={pipeSize}. Falling back to default (NULL).");
+                        
+                        query = @"SELECT ""NDTBundleFormationChart_ID"", ""Mill_ID"", ""Pipe_Size"", ""NDT_PcsPerBundle"", ""IsActive""
+                                 FROM ""NDT_BundleFormationChart""
+                                 WHERE ""Mill_ID"" = @millId AND ""IsActive"" = true AND ""Pipe_Size"" IS NULL
+                                 LIMIT 1";
+                        
+                        using (var cmd = new NpgsqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@millId", millId);
+                            using (var rdr = cmd.ExecuteReader())
+                            {
+                                if (rdr.Read())
+                                {
+                                    var chart = new NDTBundleFormationChart
+                                    {
+                                        NDTBundleFormationChart_ID = Convert.ToInt32(rdr["NDTBundleFormationChart_ID"]),
+                                        Mill_ID = Convert.ToInt32(rdr["Mill_ID"]),
+                                        Pipe_Size = null,
+                                        NDT_PcsPerBundle = Convert.ToInt32(rdr["NDT_PcsPerBundle"]),
+                                        IsActive = Convert.ToBoolean(rdr["IsActive"])
+                                    };
+                                    
+                                    Console.WriteLine($"✅ Fallback to default: NDT_PcsPerBundle = {chart.NDT_PcsPerBundle}");
+                                    return chart;
+                                }
                             }
                         }
                     }
                 }
-            }
-            return null;
+                return null;
+            }, null, "GetNDTFormationChart");
         }
 
         // PO Plans

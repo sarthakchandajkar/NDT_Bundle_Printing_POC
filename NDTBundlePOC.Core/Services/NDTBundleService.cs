@@ -36,10 +36,24 @@ namespace NDTBundlePOC.Core.Services
             if (!string.IsNullOrEmpty(poPlan.Pipe_Size) && decimal.TryParse(poPlan.Pipe_Size, out decimal parsedSize))
             {
                 pipeSize = parsedSize;
+                Console.WriteLine($"🔍 NDT Bundle Formation: Looking up chart for Pipe_Size = {pipeSize} (from PO_Plan: '{poPlan.Pipe_Size}')");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️  NDT Bundle Formation: Could not parse Pipe_Size '{poPlan.Pipe_Size}' from PO_Plan. Using default.");
             }
             
             var formationChart = _repository.GetNDTFormationChart(millId, pipeSize);
             int requiredNDTPcs = formationChart?.NDT_PcsPerBundle ?? 20; // Default to 20 pipes per bundle
+            
+            if (formationChart != null)
+            {
+                Console.WriteLine($"✅ NDT Bundle Formation: Found chart entry - Pipe_Size: {formationChart.Pipe_Size?.ToString() ?? "NULL (Default)"}, NDT_PcsPerBundle: {requiredNDTPcs}");
+            }
+            else
+            {
+                Console.WriteLine($"⚠️  NDT Bundle Formation: No chart entry found. Using default NDT_PcsPerBundle: {requiredNDTPcs}");
+            }
 
             // Check if PO has changed (Scenario 2: PO end/PO ID end)
             bool isPOChanged = _currentPOPlanId.HasValue && _currentPOPlanId.Value != poPlan.PO_Plan_ID;
