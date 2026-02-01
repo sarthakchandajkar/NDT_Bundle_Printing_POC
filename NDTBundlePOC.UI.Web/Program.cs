@@ -491,7 +491,7 @@ app.MapPost("/api/plc/process-cuts/{millId}", (INDTBundleService ndtBundleServic
 });
 
 // System status endpoint
-app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IOKBundleService okBundleService, IPipeCountingActivityServiceExtended activityService) =>
+app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtBundleService, IOKBundleService okBundleService, IPipeCountingActivityServiceExtended activityService, IDataRepository repository) =>
 {
     try
     {
@@ -507,6 +507,29 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
         if (okBundles == null) okBundles = new List<OKBundle>();
         if (ndtReadyBundles == null) ndtReadyBundles = new List<NDTBundle>();
         if (okReadyBundles == null) okReadyBundles = new List<OKBundle>();
+        
+        // Get active PO Plan ID for filtering scenario-specific counts
+        int? activePOPlanId = null;
+        try
+        {
+            var activeSlit = repository?.GetActiveSlit(0);
+            if (activeSlit != null)
+            {
+                activePOPlanId = activeSlit.PO_Plan_ID;
+            }
+        }
+        catch
+        {
+            // Ignore errors when getting active slit
+        }
+        
+        // Filter bundles by active PO Plan ID for scenario-specific counts
+        var activeNDTBundles = activePOPlanId.HasValue 
+            ? ndtBundles.Where(b => b?.PO_Plan_ID == activePOPlanId.Value).ToList()
+            : new List<NDTBundle>();
+        var activeOKBundles = activePOPlanId.HasValue 
+            ? okBundles.Where(b => b?.PO_Plan_ID == activePOPlanId.Value).ToList()
+            : new List<OKBundle>();
         
         return Results.Ok(new
         {
@@ -539,6 +562,13 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
                 totalPipes = okBundles.Sum(b => b?.OK_Pcs ?? 0),
                 bundlesCreated = okBundles.Count,
                 tagsPrinted = okBundles.Count(b => b?.Status == 3)
+            },
+            // Scenario-specific counts (filtered by active PO Plan)
+            activeScenarioCounts = new
+            {
+                ndtTagsPrinted = activeNDTBundles.Count(b => b?.Status == 3),
+                okTagsPrinted = activeOKBundles.Count(b => b?.Status == 3),
+                activePOPlanId = activePOPlanId
             },
             bundleStatus = new
             {
