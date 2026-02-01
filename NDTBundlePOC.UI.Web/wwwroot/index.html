@@ -911,42 +911,6 @@
                 </div>
             </div>
 
-            <!-- Test Scenario Tag Count Card -->
-            <div class="monitor-card" id="testScenarioTagCard" style="display: none; border: 2px solid #ffc107;">
-                <div class="monitor-card-header" style="background: #fff3cd; padding: 8px; border-radius: 4px;">
-                    <span style="color: #856404; font-weight: bold;">Test Scenario: Tag Verification</span>
-                </div>
-                <div class="monitor-card-content">
-                    <div style="margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
-                        <div style="font-size: 8pt; color: #666; margin-bottom: 5px;">Active Scenario:</div>
-                        <div style="font-size: 10pt; font-weight: bold; color: #0078D7;" id="monitorActiveScenario">None</div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div style="padding: 8px; background: #e7f3ff; border-radius: 4px;">
-                            <div style="font-size: 8pt; color: #666; margin-bottom: 5px;">OK Bundle Tags</div>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <span style="font-size: 9pt;">Expected:</span>
-                                <span id="monitorExpectedOK" style="font-size: 12pt; font-weight: bold; color: #0078D7;">-</span>
-                                <span style="font-size: 9pt;">|</span>
-                                <span style="font-size: 9pt;">Actual:</span>
-                                <span id="monitorActualOK" style="font-size: 12pt; font-weight: bold; color: #28a745;">0</span>
-                                <span id="monitorOKMatch" style="font-size: 14pt;"></span>
-                            </div>
-                        </div>
-                        <div style="padding: 8px; background: #ffe7e7; border-radius: 4px;">
-                            <div style="font-size: 8pt; color: #666; margin-bottom: 5px;">NDT Bundle Tags</div>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <span style="font-size: 9pt;">Expected:</span>
-                                <span id="monitorExpectedNDT" style="font-size: 12pt; font-weight: bold; color: #0078D7;">-</span>
-                                <span style="font-size: 9pt;">|</span>
-                                <span style="font-size: 9pt;">Actual:</span>
-                                <span id="monitorActualNDT" style="font-size: 12pt; font-weight: bold; color: #dc3545;">0</span>
-                                <span id="monitorNDTMatch" style="font-size: 14pt;"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
         <div style="margin-top: 15px;">
             <div class="monitor-card-header">Recent Activity</div>
@@ -1001,7 +965,6 @@
         <div class="filter-row" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #0078D7; background: #f8f9fa;">
             <div class="filter-actions" style="width: 100%; justify-content: flex-start; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-success" onclick="openPOPlanManagement()" style="min-width: 140px; font-weight: bold;">Manage PO Plans</button>
-                <button class="btn btn-orange" onclick="openTestScenarioManager()" style="min-width: 160px; font-weight: bold;">Test Scenarios</button>
                 <button class="btn btn-success" id="btnPLCPolling" onclick="togglePLCPolling()" style="min-width: 140px; font-weight: bold;">Start PLC Polling</button>
                 <button class="btn btn-primary-bold" onclick="printSelectedBundles(false)">Print Bundles</button>
                 <button class="btn btn-primary" onclick="showViewLog()">View Log</button>
@@ -1120,81 +1083,6 @@
         </div>
     </div>
 
-    <!-- Test Scenario Manager Modal -->
-    <div id="testScenarioModal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2 class="modal-title">Test Scenario Manager</h2>
-                <span class="close" onclick="closeTestScenarioModal()">&times;</span>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <div style="background: #e7f3ff; padding: 12px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #0078D7;">
-                    <strong style="color: #0078D7;">Current Active Scenario:</strong> 
-                    <span id="currentActiveScenario" style="color: #28a745; font-weight: bold; margin-left: 10px;">None</span>
-                </div>
-                
-                <!-- Tag Count Summary for Active Scenario -->
-                <div id="tagCountSummary" style="display: none; background: #fff3cd; padding: 15px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="font-size: 11pt; font-weight: bold; color: #856404;">Tag Printing Summary (Current Scenario)</div>
-                        <button class="btn btn-primary" onclick="refreshTagCounts()" style="padding: 4px 10px; font-size: 8pt; height: 24px;">Refresh Counts</button>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div>
-                            <div style="font-size: 10pt; font-weight: bold; color: #333; margin-bottom: 8px;">OK Bundle Tags</div>
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <span style="font-size: 9pt; color: #666;">Expected:</span>
-                                <span id="expectedOKTags" style="font-size: 14pt; font-weight: bold; color: #0078D7; min-width: 30px; text-align: center;">-</span>
-                                <span style="font-size: 9pt; color: #666;">|</span>
-                                <span style="font-size: 9pt; color: #666;">Actual:</span>
-                                <span id="actualOKTags" style="font-size: 14pt; font-weight: bold; color: #28a745; min-width: 30px; text-align: center;">0</span>
-                                <span id="okTagsMatch" style="font-size: 16pt; margin-left: 5px; min-width: 20px;"></span>
-                            </div>
-                        </div>
-                        <div>
-                            <div style="font-size: 10pt; font-weight: bold; color: #333; margin-bottom: 8px;">NDT Bundle Tags</div>
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <span style="font-size: 9pt; color: #666;">Expected:</span>
-                                <span id="expectedNDTTags" style="font-size: 14pt; font-weight: bold; color: #0078D7; min-width: 30px; text-align: center;">-</span>
-                                <span style="font-size: 9pt; color: #666;">|</span>
-                                <span style="font-size: 9pt; color: #666;">Actual:</span>
-                                <span id="actualNDTTags" style="font-size: 14pt; font-weight: bold; color: #dc3545; min-width: 30px; text-align: center;">0</span>
-                                <span id="ndtTagsMatch" style="font-size: 16pt; margin-left: 5px; min-width: 20px;"></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 8pt; color: #666; font-style: italic;">
-                        * Actual counts update automatically every 5 seconds. Click "Refresh Counts" for immediate update.
-                    </div>
-                </div>
-                
-                <div style="font-size: 9pt; color: #666; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                    <strong>Test Data:</strong> OK Pipes = 42, NDT Pipes = 30<br>
-                    Select a test scenario to activate. This will automatically create/activate the PO Plan and Slit for testing.
-                    The current active PO will be closed and the selected scenario will become active.
-                </div>
-            </div>
-            <table class="modal-table">
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>Pipe Size</th>
-                        <th>OK Pcs/Bundle</th>
-                        <th>NDT Pcs/Bundle</th>
-                        <th>Expected OK Tags</th>
-                        <th>Expected NDT Tags</th>
-                        <th>Expected OK Bundles</th>
-                        <th>Expected NDT Bundles</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="testScenarioTableBody">
-                    <!-- Will be populated by JavaScript -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-
     <!-- PO Plan Edit Modal -->
     <div id="poPlanEditModal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
@@ -1278,9 +1166,6 @@
                 refreshPipeActivity();
             }, 2000); // Refresh every 2 seconds
             
-            // Check active scenario on page load and periodically
-            checkActiveScenario();
-            setInterval(checkActiveScenario, 5000);
         });
 
         // Initialize SignalR connection for heartbeat updates
@@ -1798,9 +1683,6 @@
                 document.getElementById('activeBundles').textContent = bundleStatus.active ?? 0;
                 document.getElementById('readyBundles').textContent = bundleStatus.ready ?? 0;
                 document.getElementById('printedBundles').textContent = bundleStatus.printed ?? 0;
-                
-                // Update test scenario tag counts if active scenario exists
-                await checkActiveScenario();
                 
                 if (!data.error) {
                     addActivityLog('✓ System status refreshed successfully');
@@ -2409,288 +2291,15 @@
             }
         }
 
-        // Test Scenario Management Functions
-        const testScenarios = [
-            {
-                name: "CASE1",
-                displayName: "Case 1: Single OK + Multiple NDT",
-                pipeSize: "8.0",
-                okPcsPerBundle: 42,
-                ndtPcsPerBundle: 13,
-                expectedOKTags: 1,
-                expectedNDTTags: 2,
-                expectedOK: "1 full (42)",
-                expectedNDT: "2 full (13+13) + 1 partial (4)"
-            },
-            {
-                name: "CASE2",
-                displayName: "Case 2: Multiple OK + Single NDT",
-                pipeSize: "6.0",
-                okPcsPerBundle: 21,
-                ndtPcsPerBundle: 20,
-                expectedOKTags: 2,
-                expectedNDTTags: 1,
-                expectedOK: "2 full (21+21)",
-                expectedNDT: "1 full (20) + 1 partial (10)"
-            },
-            {
-                name: "CASE3",
-                displayName: "Case 3: Multiple OK + Multiple NDT",
-                pipeSize: "5.0",
-                okPcsPerBundle: 14,
-                ndtPcsPerBundle: 25,
-                expectedOKTags: 3,
-                expectedNDTTags: 1,
-                expectedOK: "3 full (14+14+14)",
-                expectedNDT: "1 full (25) + 1 partial (5)"
-            },
-            {
-                name: "CASE4",
-                displayName: "Case 4: Partial Bundles",
-                pipeSize: "3.0",
-                okPcsPerBundle: 50,
-                ndtPcsPerBundle: 45,
-                expectedOKTags: 1,
-                expectedNDTTags: 1,
-                expectedOK: "1 partial (42)*",
-                expectedNDT: "1 partial (30)*"
-            },
-            {
-                name: "CASE5",
-                displayName: "Case 5: Default NDT Size",
-                pipeSize: "NULL",
-                okPcsPerBundle: 42,
-                ndtPcsPerBundle: 20,
-                expectedOKTags: 1,
-                expectedNDTTags: 1,
-                expectedOK: "1 full (42)",
-                expectedNDT: "1 full (20) + 1 partial (10)"
-            }
-        ];
-
-        async function openTestScenarioManager() {
-            document.getElementById('testScenarioModal').style.display = 'block';
-            await checkActiveScenario();
-            await loadTestScenarios();
-            await refreshTagCounts();
-        }
-        
-        async function refreshTagCounts() {
-            await checkActiveScenario();
-            await loadTestScenarios();
-        }
-
-        function closeTestScenarioModal() {
-            document.getElementById('testScenarioModal').style.display = 'none';
-        }
-
-        async function loadTestScenarios() {
-            const tbody = document.getElementById('testScenarioTableBody');
-            
-            // Get actual tag counts (use scenario-specific counts if available)
-            let actualOKTags = 0;
-            let actualNDTTags = 0;
-            try {
-                const statusResponse = await fetch('/api/system-status');
-                const statusData = await statusResponse.json();
-                // Use activeScenarioCounts if available (filtered by active PO Plan), otherwise fall back to global counts
-                actualOKTags = statusData.activeScenarioCounts?.okTagsPrinted ?? statusData.okCounts?.tagsPrinted ?? 0;
-                actualNDTTags = statusData.activeScenarioCounts?.ndtTagsPrinted ?? statusData.ndtCounts?.tagsPrinted ?? 0;
-            } catch (error) {
-                console.error('Error fetching tag counts:', error);
-            }
-            
-            tbody.innerHTML = testScenarios.map(scenario => {
-                // Check if this is the active scenario
-                const isActive = document.getElementById('currentActiveScenario').textContent.includes(scenario.displayName);
-                const rowStyle = isActive ? 'background-color: #e7f3ff;' : '';
-                
-                return `
-                <tr style="${rowStyle}">
-                    <td><strong>${scenario.displayName}</strong>${isActive ? ' <span style="color: #28a745;">(Active)</span>' : ''}</td>
-                    <td>${scenario.pipeSize}</td>
-                    <td>${scenario.okPcsPerBundle}</td>
-                    <td>${scenario.ndtPcsPerBundle}</td>
-                    <td style="text-align: center;">
-                        <span style="font-weight: bold; color: #0078D7; font-size: 11pt;">${scenario.expectedOKTags}</span>
-                        ${isActive ? `<br><small style="color: #666;">Actual: <span id="scenario_${scenario.name}_ok">${actualOKTags}</span></small>` : ''}
-                    </td>
-                    <td style="text-align: center;">
-                        <span style="font-weight: bold; color: #dc3545; font-size: 11pt;">${scenario.expectedNDTTags}</span>
-                        ${isActive ? `<br><small style="color: #666;">Actual: <span id="scenario_${scenario.name}_ndt">${actualNDTTags}</span></small>` : ''}
-                    </td>
-                    <td style="font-size: 8pt; color: #666;">${scenario.expectedOK}</td>
-                    <td style="font-size: 8pt; color: #666;">${scenario.expectedNDT}</td>
-                    <td>
-                        <button class="btn btn-success" onclick="activateTestScenario('${scenario.name}')">
-                            Start Scenario
-                        </button>
-                    </td>
-                </tr>
-            `;
-            }).join('');
-        }
-
-        async function activateTestScenario(scenarioName) {
-            const scenario = testScenarios.find(s => s.name === scenarioName);
-            const scenarioDisplayName = scenario ? scenario.displayName : scenarioName;
-            
-            if (!confirm(`Activate test scenario "${scenarioDisplayName}"?\n\nThis will:\n- Close the current active PO\n- Activate this test scenario\n- Create/activate the PO Plan and Slit for testing`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/test-scenarios/activate/${scenarioName}`, {
-                    method: 'POST'
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    alert(`✓ Test scenario "${scenarioDisplayName}" activated successfully!\n\nPO: ${result.poPlan.po_No}\nPipe Size: ${result.poPlan.pipe_Size || 'NULL'}\nPcsPerBundle: ${result.poPlan.pcsPerBundle}\n\nYou can now start PLC polling to test with OK=42 and NDT=30.`);
-                    await checkActiveScenario();
-                    addActivityLog(`✓ Test scenario ${scenarioName} (${scenarioDisplayName}) activated`);
-                    // Refresh bundles and status
-                    await loadBundles();
-                    refreshSystemStatus();
-                    closeTestScenarioModal();
-                } else {
-                    alert('Error: ' + result.message);
-                    addActivityLog('✗ Failed to activate test scenario: ' + result.message);
-                }
-            } catch (error) {
-                console.error('Error activating scenario:', error);
-                alert('Error activating scenario: ' + error.message);
-                addActivityLog('✗ Error activating test scenario: ' + error.message);
-            }
-        }
-
-        async function checkActiveScenario() {
-            try {
-                const response = await fetch('/api/test-scenarios/active');
-                const data = await response.json();
-                
-                const currentScenarioElement = document.getElementById('currentActiveScenario');
-                const tagCountSummary = document.getElementById('tagCountSummary');
-                
-                if (data.activeScenario) {
-                    const scenario = testScenarios.find(s => s.name === data.activeScenario);
-                    if (scenario) {
-                        currentScenarioElement.textContent = scenario.displayName;
-                        currentScenarioElement.style.color = '#28a745';
-                        
-                        // Show tag count summary in modal
-                        tagCountSummary.style.display = 'block';
-                        document.getElementById('expectedOKTags').textContent = scenario.expectedOKTags;
-                        document.getElementById('expectedNDTTags').textContent = scenario.expectedNDTTags;
-                        
-                        // Show tag count card in system monitor
-                        const tagCard = document.getElementById('testScenarioTagCard');
-                        if (tagCard) {
-                            tagCard.style.display = 'block';
-                            document.getElementById('monitorActiveScenario').textContent = scenario.displayName;
-                            document.getElementById('monitorExpectedOK').textContent = scenario.expectedOKTags;
-                            document.getElementById('monitorExpectedNDT').textContent = scenario.expectedNDTTags;
-                        }
-                        
-                        // Get actual tag counts (use scenario-specific counts if available)
-                        try {
-                            const statusResponse = await fetch('/api/system-status');
-                            const statusData = await statusResponse.json();
-                            // Use activeScenarioCounts if available (filtered by active PO Plan), otherwise fall back to global counts
-                            const actualOK = statusData.activeScenarioCounts?.okTagsPrinted ?? statusData.okCounts?.tagsPrinted ?? 0;
-                            const actualNDT = statusData.activeScenarioCounts?.ndtTagsPrinted ?? statusData.ndtCounts?.tagsPrinted ?? 0;
-                            
-                            // Update modal
-                            document.getElementById('actualOKTags').textContent = actualOK;
-                            document.getElementById('actualNDTTags').textContent = actualNDT;
-                            
-                            // Update system monitor
-                            if (tagCard) {
-                                document.getElementById('monitorActualOK').textContent = actualOK;
-                                document.getElementById('monitorActualNDT').textContent = actualNDT;
-                            }
-                            
-                            // Update match indicators in modal
-                            const okMatch = document.getElementById('okTagsMatch');
-                            const ndtMatch = document.getElementById('ndtTagsMatch');
-                            
-                            if (actualOK === scenario.expectedOKTags) {
-                                okMatch.textContent = '✓';
-                                okMatch.style.color = '#28a745';
-                            } else {
-                                okMatch.textContent = '⚠';
-                                okMatch.style.color = '#ffc107';
-                            }
-                            
-                            if (actualNDT === scenario.expectedNDTTags) {
-                                ndtMatch.textContent = '✓';
-                                ndtMatch.style.color = '#28a745';
-                            } else {
-                                ndtMatch.textContent = '⚠';
-                                ndtMatch.style.color = '#ffc107';
-                            }
-                            
-                            // Update match indicators in system monitor
-                            if (tagCard) {
-                                const monitorOKMatch = document.getElementById('monitorOKMatch');
-                                const monitorNDTMatch = document.getElementById('monitorNDTMatch');
-                                
-                                if (actualOK === scenario.expectedOKTags) {
-                                    monitorOKMatch.textContent = '✓';
-                                    monitorOKMatch.style.color = '#28a745';
-                                } else {
-                                    monitorOKMatch.textContent = '⚠';
-                                    monitorOKMatch.style.color = '#ffc107';
-                                }
-                                
-                                if (actualNDT === scenario.expectedNDTTags) {
-                                    monitorNDTMatch.textContent = '✓';
-                                    monitorNDTMatch.style.color = '#28a745';
-                                } else {
-                                    monitorNDTMatch.textContent = '⚠';
-                                    monitorNDTMatch.style.color = '#ffc107';
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error fetching tag counts:', error);
-                        }
-                    } else {
-                        currentScenarioElement.textContent = data.activeScenario;
-                        currentScenarioElement.style.color = '#28a745';
-                        tagCountSummary.style.display = 'none';
-                        const tagCard = document.getElementById('testScenarioTagCard');
-                        if (tagCard) tagCard.style.display = 'none';
-                    }
-                } else {
-                    currentScenarioElement.textContent = 'None';
-                    currentScenarioElement.style.color = '#666';
-                    tagCountSummary.style.display = 'none';
-                    const tagCard = document.getElementById('testScenarioTagCard');
-                    if (tagCard) tagCard.style.display = 'none';
-                }
-                
-                // Reload scenarios table to update active indicator
-                if (document.getElementById('testScenarioModal').style.display === 'block') {
-                    await loadTestScenarios();
-                }
-            } catch (error) {
-                console.error('Error checking active scenario:', error);
-            }
-        }
-
         // Close modals when clicking outside
         window.onclick = function(event) {
             const poPlanModal = document.getElementById('poPlanModal');
             const poPlanEditModal = document.getElementById('poPlanEditModal');
-            const testScenarioModal = document.getElementById('testScenarioModal');
             if (event.target === poPlanModal) {
                 closePOPlanModal();
             }
             if (event.target === poPlanEditModal) {
                 closePOPlanEditModal();
-            }
-            if (event.target === testScenarioModal) {
-                closeTestScenarioModal();
             }
         }
     </script>
