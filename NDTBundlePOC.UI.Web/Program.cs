@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Npgsql;
 using NDTBundlePOC.Core.Models;
 using NDTBundlePOC.Core.Services;
 using NDTBundlePOC.UI.Web.Hubs;
@@ -493,17 +495,24 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
 {
     try
     {
-        var ndtBundles = ndtBundleService.GetAllNDTBundles();
-        var ndtReadyBundles = ndtBundleService.GetBundlesReadyForPrinting();
-        var okBundles = okBundleService.GetAllOKBundles();
-        var okReadyBundles = okBundleService.GetBundlesReadyForPrinting();
+        // Get bundles with null-safe handling
+        var ndtBundles = ndtBundleService?.GetAllNDTBundles() ?? new List<NDTBundle>();
+        var ndtReadyBundles = ndtBundleService?.GetBundlesReadyForPrinting() ?? new List<NDTBundle>();
+        var okBundles = okBundleService?.GetAllOKBundles() ?? new List<OKBundle>();
+        var okReadyBundles = okBundleService?.GetBundlesReadyForPrinting() ?? new List<OKBundle>();
         var (okCuts, ndtCuts) = activityService?.GetCurrentCounts() ?? (0, 0);
+        
+        // Ensure bundles are not null before using LINQ operations
+        if (ndtBundles == null) ndtBundles = new List<NDTBundle>();
+        if (okBundles == null) okBundles = new List<OKBundle>();
+        if (ndtReadyBundles == null) ndtReadyBundles = new List<NDTBundle>();
+        if (okReadyBundles == null) okReadyBundles = new List<OKBundle>();
         
         return Results.Ok(new
         {
             plc = new
             {
-                connected = plcService.IsConnected,
+                connected = plcService?.IsConnected ?? false,
                 ipAddress = "192.168.0.13",
                 rack = 0,
                 slot = 2
@@ -521,27 +530,40 @@ app.MapGet("/api/system-status", (IPLCService plcService, INDTBundleService ndtB
             },
             ndtCounts = new
             {
-                totalPipes = ndtBundles.Sum(b => b.NDT_Pcs),
+                totalPipes = ndtBundles.Sum(b => b?.NDT_Pcs ?? 0),
                 bundlesCreated = ndtBundles.Count,
-                tagsPrinted = ndtBundles.Count(b => b.Status == 3)
+                tagsPrinted = ndtBundles.Count(b => b?.Status == 3)
             },
             okCounts = new
             {
-                totalPipes = okBundles.Sum(b => b.OK_Pcs),
+                totalPipes = okBundles.Sum(b => b?.OK_Pcs ?? 0),
                 bundlesCreated = okBundles.Count,
-                tagsPrinted = okBundles.Count(b => b.Status == 3)
+                tagsPrinted = okBundles.Count(b => b?.Status == 3)
             },
             bundleStatus = new
             {
-                active = ndtBundles.Count(b => b.Status == 1) + okBundles.Count(b => b.Status == 1),
-                ready = ndtReadyBundles.Count + okReadyBundles.Count,
-                printed = ndtBundles.Count(b => b.Status == 3) + okBundles.Count(b => b.Status == 3)
+                active = ndtBundles.Count(b => b?.Status == 1) + okBundles.Count(b => b?.Status == 1),
+                ready = (ndtReadyBundles?.Count ?? 0) + (okReadyBundles?.Count ?? 0),
+                printed = ndtBundles.Count(b => b?.Status == 3) + okBundles.Count(b => b?.Status == 3)
             }
         });
     }
     catch (Exception ex)
     {
-        return Results.BadRequest(new { success = false, message = ex.Message });
+        Console.WriteLine($"✗ Error in /api/system-status endpoint: {ex.Message}");
+        Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
+        
+        // Return a valid response structure even on error, so UI doesn't break
+        return Results.Ok(new
+        {
+            plc = new { connected = false, ipAddress = "192.168.0.13", rack = 0, slot = 2 },
+            printer = new { ipAddress = "192.168.0.125", port = 9100, status = "error" },
+            pipeCounts = new { currentOKCuts = 0, currentNDTCuts = 0 },
+            ndtCounts = new { totalPipes = 0, bundlesCreated = 0, tagsPrinted = 0 },
+            okCounts = new { totalPipes = 0, bundlesCreated = 0, tagsPrinted = 0 },
+            bundleStatus = new { active = 0, ready = 0, printed = 0 },
+            error = ex.Message
+        });
     }
 });
 
@@ -573,6 +595,182 @@ app.MapGet("/api/pipe-counting-activity", (IPipeCountingActivityServiceExtended 
     }
     catch (Exception ex)
     {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// Test Scenario Management API endpoints
+app.MapPost("/api/test-scenarios/activate/{scenarioName}", async (IDataRepository repository, IConfiguration configuration, string scenarioName) =>
+{
+    try
+    {
+        // Define test scenarios
+        var scenarios = new Dictionary<string, (string poNo, string pipeSize, int pcsPerBundle)>
+        {
+            { "CASE1", ("PO_TEST_CASE1", "8.0", 42) },
+            { "CASE2", ("PO_TEST_CASE2", "6.0", 21) },
+            { "CASE3", ("PO_TEST_CASE3", "5.0", 14) },
+            { "CASE4", ("PO_TEST_CASE4", "3.0", 50) },
+            { "CASE5", ("PO_TEST_CASE5", null, 42) }
+        };
+
+        if (!scenarios.ContainsKey(scenarioName))
+        {
+            return Results.BadRequest(new { success = false, message = $"Unknown scenario: {scenarioName}" });
+        }
+
+        var (poNo, pipeSize, pcsPerBundle) = scenarios[scenarioName];
+
+        // Close all active slits (Status = 2)
+        var allPOPlans = repository.GetPOPlans() ?? new List<POPlan>();
+        foreach (var po in allPOPlans)
+        {
+            var activeSlit = repository.GetActiveSlit(po.PO_Plan_ID);
+            if (activeSlit != null && activeSlit.Status == 2)
+            {
+                activeSlit.Status = 3; // Completed
+                repository.UpdateSlit(activeSlit);
+            }
+        }
+
+        // Find or create PO Plan
+        var poPlan = allPOPlans.FirstOrDefault(p => p.PO_No == poNo);
+
+        if (poPlan == null)
+        {
+            // Create new PO Plan
+            poPlan = new POPlan
+            {
+                PLC_POID = 2000 + int.Parse(scenarioName.Replace("CASE", "")),
+                PO_No = poNo,
+                Pipe_Type = "X65",
+                Pipe_Size = pipeSize,
+                PcsPerBundle = pcsPerBundle,
+                Pipe_Len = 12.0m,
+                PipeWt_per_mtr = 2.5m,
+                SAP_Type = "SAP_TEST",
+                Shop_ID = 1
+            };
+            repository.AddPOPlan(poPlan);
+            
+            // Reload to get the ID
+            allPOPlans = repository.GetPOPlans() ?? new List<POPlan>();
+            poPlan = allPOPlans.FirstOrDefault(p => p.PO_No == poNo);
+        }
+
+        if (poPlan == null)
+        {
+            return Results.BadRequest(new { success = false, message = "Failed to create or find PO Plan" });
+        }
+
+        // Create or activate Slit using direct SQL (since AddSlit doesn't exist in interface)
+        var connectionString = configuration.GetConnectionString("ServerConnectionString");
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            return Results.BadRequest(new { success = false, message = "Database connection string not configured" });
+        }
+
+        using (var conn = new NpgsqlConnection(connectionString))
+        {
+            conn.Open();
+            
+            // Check if slit exists
+            using (var checkCmd = new NpgsqlCommand(
+                @"SELECT ""Slit_ID"", ""Status"" FROM ""M1_Slit"" 
+                  WHERE ""PO_Plan_ID"" = @poPlanId AND ""Slit_No"" = @slitNo", conn))
+            {
+                checkCmd.Parameters.AddWithValue("@poPlanId", poPlan.PO_Plan_ID);
+                checkCmd.Parameters.AddWithValue("@slitNo", $"SLIT_{scenarioName}");
+                
+                var existingSlitId = checkCmd.ExecuteScalar();
+                
+                if (existingSlitId != null && existingSlitId != DBNull.Value)
+                {
+                    // Update existing slit
+                    using (var updateCmd = new NpgsqlCommand(
+                        @"UPDATE ""M1_Slit"" 
+                          SET ""Status"" = 2, ""Slit_NDT"" = 0, ""SlitMillStartTime"" = CURRENT_TIMESTAMP
+                          WHERE ""Slit_ID"" = @slitId", conn))
+                    {
+                        updateCmd.Parameters.AddWithValue("@slitId", existingSlitId);
+                        updateCmd.ExecuteNonQuery();
+                    }
+                }
+                else
+                {
+                    // Create new slit
+                    using (var insertCmd = new NpgsqlCommand(
+                        @"INSERT INTO ""M1_Slit"" (""PO_Plan_ID"", ""Slit_No"", ""Status"", ""Slit_NDT"", ""SlitMillStartTime"")
+                          VALUES (@poPlanId, @slitNo, 2, 0, CURRENT_TIMESTAMP)", conn))
+                    {
+                        insertCmd.Parameters.AddWithValue("@poPlanId", poPlan.PO_Plan_ID);
+                        insertCmd.Parameters.AddWithValue("@slitNo", $"SLIT_{scenarioName}");
+                        insertCmd.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        return Results.Ok(new 
+        { 
+            success = true, 
+            message = $"Test scenario {scenarioName} activated",
+            poPlan = new
+            {
+                poPlan.PO_Plan_ID,
+                poPlan.PO_No,
+                poPlan.Pipe_Size,
+                poPlan.PcsPerBundle
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Error activating test scenario {scenarioName}: {ex.Message}");
+        Console.WriteLine($"  → Stack trace: {ex.StackTrace}");
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+// Get current active scenario
+app.MapGet("/api/test-scenarios/active", (IDataRepository repository) =>
+{
+    try
+    {
+        var activeSlit = repository.GetActiveSlit(0);
+        if (activeSlit == null)
+        {
+            return Results.Ok(new { activeScenario = null });
+        }
+
+        var poPlan = repository.GetPOPlan(activeSlit.PO_Plan_ID);
+        if (poPlan == null)
+        {
+            return Results.Ok(new { activeScenario = null });
+        }
+
+        // Determine scenario name from PO_No
+        string scenarioName = null;
+        if (poPlan.PO_No != null && poPlan.PO_No.StartsWith("PO_TEST_CASE"))
+        {
+            scenarioName = poPlan.PO_No.Replace("PO_TEST_", "");
+        }
+
+        return Results.Ok(new 
+        { 
+            activeScenario = scenarioName,
+            poPlan = new
+            {
+                poPlan.PO_Plan_ID,
+                poPlan.PO_No,
+                poPlan.Pipe_Size,
+                poPlan.PcsPerBundle
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Error getting active scenario: {ex.Message}");
         return Results.BadRequest(new { success = false, message = ex.Message });
     }
 });
