@@ -56,7 +56,7 @@ namespace NDTBundlePOC.Core.Services
                     activeBundle.BundleEndTime = DateTime.Now;
                     activeBundle.IsFullBundle = false; // Partial bundle
                     _repository.UpdateNDTBundle(activeBundle);
-                    Console.WriteLine($"✓ NDT Bundle {activeBundle.Bundle_No} closed (partial) due to PO end/change. Ready for printing.");
+                    Console.WriteLine($"📦 NDT BUNDLE COMPLETED: {activeBundle.Bundle_No} | Pieces: {activeBundle.NDT_Pcs} | Batch: {activeBundle.Batch_No ?? "N/A"} | Type: Partial (PO end/change) | Status: Ready for printing");
                 }
             }
             
@@ -121,16 +121,16 @@ namespace NDTBundlePOC.Core.Services
                         {
                             string newBatchNo = GenerateNDTBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
                             string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
-                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} with new batch {newBatchNo} (batch sum {currentBatchSum} >= {requiredNDTPcs})");
+                            Console.WriteLine($"📦 Created new NDT bundle: {newBundleNo} | New batch: {newBatchNo} | Batch sum: {currentBatchSum} >= {requiredNDTPcs}");
                         }
                         // Create new bundle in same batch if batch not complete yet
                         else if (!shouldEndBatch && remainingCuts > 0)
                         {
                             string newBundleNo = CreateNewNDTBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, currentBundle.Batch_No);
-                            Console.WriteLine($"✓ Created new NDT bundle {newBundleNo} in same batch {currentBundle.Batch_No} for remaining {remainingCuts} cuts");
+                            Console.WriteLine($"📦 Created new NDT bundle: {newBundleNo} | Same batch: {currentBundle.Batch_No} | Remaining cuts: {remainingCuts}");
                         }
                         
-                        Console.WriteLine($"✓ NDT Bundle {currentBundle.Bundle_No} completed with {currentBundle.NDT_Pcs} pipes. Ready for printing.");
+                        Console.WriteLine($"📦 NDT BUNDLE COMPLETED: {currentBundle.Bundle_No} | Pieces: {currentBundle.NDT_Pcs} | Batch: {currentBundle.Batch_No ?? "N/A"} | Type: Full | Status: Ready for printing");
                     }
                     else if (shouldEndBatchByPO)
                     {
@@ -139,7 +139,7 @@ namespace NDTBundlePOC.Core.Services
                         currentBundle.BundleEndTime = DateTime.Now;
                         currentBundle.IsFullBundle = false; // Partial bundle
                         _repository.UpdateNDTBundle(currentBundle);
-                        Console.WriteLine($"✓ NDT Bundle {currentBundle.Bundle_No} closed (partial, PO ended) with {currentBundle.NDT_Pcs} pipes. Batch sum: {currentBatchSum} < {requiredNDTPcs}. Ready for printing.");
+                        Console.WriteLine($"📦 NDT BUNDLE COMPLETED: {currentBundle.Bundle_No} | Pieces: {currentBundle.NDT_Pcs} | Batch: {currentBundle.Batch_No ?? "N/A"} | Type: Partial (PO ended) | Status: Ready for printing");
                         
                         // Next PO will get new batch number (handled at start of ProcessNDTCuts)
                     }
@@ -212,7 +212,7 @@ namespace NDTBundlePOC.Core.Services
                             newBundle.IsFullBundle = true;
                             _repository.UpdateNDTBundle(newBundle);
                             
-                            Console.WriteLine($"✓ NDT Bundle {newBundle.Bundle_No} completed with {newBundle.NDT_Pcs} pipes. Ready for printing.");
+                            Console.WriteLine($"📦 NDT BUNDLE COMPLETED: {newBundle.Bundle_No} | Pieces: {newBundle.NDT_Pcs} | Batch: {newBundle.Batch_No ?? "N/A"} | Type: Full | Status: Ready for printing");
                         }
                     }
                     else

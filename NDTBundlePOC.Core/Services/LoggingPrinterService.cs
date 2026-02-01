@@ -74,9 +74,8 @@ namespace NDTBundlePOC.Core.Services
                     // Append to log file
                     File.AppendAllText(_logFilePath, logEntry.ToString());
                     
-                    // Also write to console
-                    Console.WriteLine($"✓ Tag logged to file (Test Mode): {_logFilePath}");
-                    Console.WriteLine($"  Bundle: {printData.BundleNo}, Pieces: {printData.NDT_Pcs}, PO: {printData.PO_No}");
+                    // Also write to console (minimal logging - main logging is in ControllablePLCPollingService)
+                    // Console output removed to reduce noise - check log file for details
                     
                     return true;
                 }

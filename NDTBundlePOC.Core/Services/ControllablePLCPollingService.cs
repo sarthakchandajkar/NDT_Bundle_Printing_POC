@@ -44,6 +44,10 @@ namespace NDTBundlePOC.Core.Services
         private bool _previousOKBundleDone = false;
         private bool _previousNDTBundleDone = false;
         private bool _isInitialized = false;
+        
+        // Track printed tags for summary
+        private int _totalOKTagsPrinted = 0;
+        private int _totalNDTTagsPrinted = 0;
 
         public bool IsPolling 
         { 
@@ -240,13 +244,13 @@ namespace NDTBundlePOC.Core.Services
                             int newOKCuts = currentOKCuts - _previousOKCuts;
                             _previousOKCuts = currentOKCuts;
                             
-                            _logger?.LogInformation($"Detected {newOKCuts} new OK cuts");
+                            _logger?.LogInformation($"📊 OK Pipes: +{newOKCuts} new (Total: {currentOKCuts})");
                             _okBundleService.ProcessOKCuts(_millId, newOKCuts);
                         }
                         else if (_previousOKCuts == 0 && currentOKCuts > 0)
                         {
                             _previousOKCuts = currentOKCuts;
-                            _logger?.LogInformation($"Initialized OK cuts tracking: {currentOKCuts} (service started)");
+                            _logger?.LogInformation($"📊 OK Pipes initialized: {currentOKCuts} total");
                         }
 
                         // Process new NDT cuts
@@ -255,13 +259,13 @@ namespace NDTBundlePOC.Core.Services
                             int newNDTCuts = currentNDTCuts - _previousNDTCuts;
                             _previousNDTCuts = currentNDTCuts;
                             
-                            _logger?.LogInformation($"Detected {newNDTCuts} new NDT cuts");
+                            _logger?.LogInformation($"📊 NDT Pipes: +{newNDTCuts} new (Total: {currentNDTCuts})");
                             _ndtBundleService.ProcessNDTCuts(_millId, newNDTCuts);
                         }
                         else if (_previousNDTCuts == 0 && currentNDTCuts > 0)
                         {
                             _previousNDTCuts = currentNDTCuts;
-                            _logger?.LogInformation($"Initialized NDT cuts tracking: {currentNDTCuts} (service started)");
+                            _logger?.LogInformation($"📊 NDT Pipes initialized: {currentNDTCuts} total");
                         }
 
                         // Check for completed bundles and print (skip first cycle)
@@ -269,11 +273,18 @@ namespace NDTBundlePOC.Core.Services
                         {
                             CheckAndPrintOKBundles();
                             CheckAndPrintNDTBundles();
+                            
+                            // Log summary periodically (every 10 cycles)
+                            if ((_totalOKTagsPrinted + _totalNDTTagsPrinted) > 0 && 
+                                (_totalOKTagsPrinted + _totalNDTTagsPrinted) % 10 == 0)
+                            {
+                                _logger?.LogInformation($"📊 PRINTING SUMMARY: OK Tags: {_totalOKTagsPrinted} | NDT Tags: {_totalNDTTagsPrinted} | Total: {_totalOKTagsPrinted + _totalNDTTagsPrinted}");
+                            }
                         }
                         else
                         {
                             _isInitialized = true;
-                            _logger?.LogInformation("Service initialization complete. Skipped first cycle bundle printing to avoid stale bundles.");
+                            _logger?.LogInformation("Service initialized. Starting bundle processing...");
                         }
 
                         // Check OK Bundle Done signal
@@ -385,13 +396,12 @@ namespace NDTBundlePOC.Core.Services
                 var readyBundles = _okBundleService.GetBundlesReadyForPrinting();
                 if (readyBundles == null)
                 {
-                    _logger?.LogWarning("GetBundlesReadyForPrinting returned null - database may be unavailable");
-                    return;
+                    return; // Silently return if database unavailable
                 }
                 
-                if (readyBundles.Count > 0)
+                if (readyBundles.Count == 0)
                 {
-                    _logger?.LogInformation($"Found {readyBundles.Count} OK bundle(s) with Status=2 (Completed)");
+                    return; // No bundles ready, skip logging
                 }
                 
                 foreach (var bundle in readyBundles)
@@ -404,16 +414,7 @@ namespace NDTBundlePOC.Core.Services
                     
                     if (shouldPrint)
                     {
-                        if (_bypassOKBundlePLCConditions && (!pipeDone || !atPackingStation))
-                        {
-                            _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (TEST MODE - PLC conditions bypassed)");
-                            _logger?.LogInformation($"  → Actual PLC conditions: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
-                        }
-                        else
-                        {
-                            _logger?.LogInformation($"Printing OK bundle: {bundle.Bundle_No} (ID: {bundle.OKBundle_ID}, Pcs: {bundle.OK_Pcs}, Status: {bundle.Status})");
-                            _logger?.LogInformation($"  Conditions met: L1L2_PipeDone={pipeDone}, AtPackingStation={atPackingStation}");
-                        }
+                        _logger?.LogInformation($"🖨️  PRINTING OK BUNDLE: {bundle.Bundle_No} | Pieces: {bundle.OK_Pcs} | Type: {(bundle.IsFullBundle ? "Full" : "Partial")}");
                         
                         bool printed = _okBundleService.PrintBundleTag(
                             bundle.OKBundle_ID,
@@ -424,22 +425,12 @@ namespace NDTBundlePOC.Core.Services
                         
                         if (printed)
                         {
-                            _logger?.LogInformation($"✓ Successfully printed OK bundle: {bundle.Bundle_No}");
+                            _totalOKTagsPrinted++;
+                            _logger?.LogInformation($"✅ OK TAG PRINTED #{_totalOKTagsPrinted}: {bundle.Bundle_No} ({bundle.OK_Pcs} pieces)");
                         }
                         else
                         {
-                            _logger?.LogWarning($"✗ Failed to print OK bundle: {bundle.Bundle_No}");
-                        }
-                    }
-                    else
-                    {
-                        _logger?.LogInformation($"⚠ OK bundle {bundle.Bundle_No} waiting for printing conditions:");
-                        _logger?.LogInformation($"  → L1L2_PipeDone (DB250.DBX3.4): {pipeDone}");
-                        _logger?.LogInformation($"  → AtPackingStation: {atPackingStation}");
-                        _logger?.LogInformation($"  → Bypass enabled: {_bypassOKBundlePLCConditions}");
-                        if (!_bypassOKBundlePLCConditions)
-                        {
-                            _logger?.LogInformation($"  → Both PLC conditions must be TRUE for printing (or enable bypass for testing)");
+                            _logger?.LogWarning($"❌ FAILED to print OK bundle: {bundle.Bundle_No}");
                         }
                     }
                 }
@@ -590,5 +581,6 @@ namespace NDTBundlePOC.Core.Services
         }
     }
 }
+
 
 

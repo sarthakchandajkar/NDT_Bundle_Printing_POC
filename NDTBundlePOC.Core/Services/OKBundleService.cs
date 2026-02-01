@@ -117,11 +117,11 @@ namespace NDTBundlePOC.Core.Services
                         {
                             string newBatchNo = GenerateOKBatchNumber(poPlan.PO_Plan_ID, currentBundle.Batch_No);
                             string newBundleNo = CreateNewOKBundle(poPlan.PO_Plan_ID, activeSlit.Slit_ID, newBatchNo);
-                            Console.WriteLine($"✓ Created new OK bundle {newBundleNo} for remaining {remainingCuts} cuts");
+                            Console.WriteLine($"📦 Created new OK bundle: {newBundleNo} for remaining {remainingCuts} cuts");
                         }
                         
-                        string bundleType = currentBundle.IsFullBundle ? "full" : "partial (PO ended)";
-                        Console.WriteLine($"✓ OK Bundle {currentBundle.Bundle_No} completed ({bundleType}) with {currentBundle.OK_Pcs} pipes. Ready for printing.");
+                        string bundleType = currentBundle.IsFullBundle ? "Full" : "Partial (PO ended)";
+                        Console.WriteLine($"📦 OK BUNDLE COMPLETED: {currentBundle.Bundle_No} | Pieces: {currentBundle.OK_Pcs} | Type: {bundleType} | Status: Ready for printing");
                     }
                     else
                     {
@@ -157,8 +157,8 @@ namespace NDTBundlePOC.Core.Services
                             newBundle.IsFullBundle = newBundle.OK_Pcs >= requiredOKPcs;
                             UpdateOKBundle(newBundle);
                             
-                            string bundleType = newBundle.IsFullBundle ? "full" : "partial (PO ended)";
-                            Console.WriteLine($"✓ OK Bundle {newBundle.Bundle_No} completed ({bundleType}) with {newBundle.OK_Pcs} pipes. Ready for printing.");
+                            string bundleType = newBundle.IsFullBundle ? "Full" : "Partial (PO ended)";
+                            Console.WriteLine($"📦 OK BUNDLE COMPLETED: {newBundle.Bundle_No} | Pieces: {newBundle.OK_Pcs} | Type: {bundleType} | Status: Ready for printing");
                         }
                     }
                     else
