@@ -605,7 +605,7 @@ app.MapPost("/api/test-scenarios/activate/{scenarioName}", async (IDataRepositor
     try
     {
         // Define test scenarios
-        var scenarios = new Dictionary<string, (string poNo, string pipeSize, int pcsPerBundle)>
+        var scenarios = new Dictionary<string, (string poNo, string? pipeSize, int pcsPerBundle)>
         {
             { "CASE1", ("PO_TEST_CASE1", "8.0", 42) },
             { "CASE2", ("PO_TEST_CASE2", "6.0", 21) },
@@ -740,17 +740,17 @@ app.MapGet("/api/test-scenarios/active", (IDataRepository repository) =>
         var activeSlit = repository.GetActiveSlit(0);
         if (activeSlit == null)
         {
-            return Results.Ok(new { activeScenario = null });
+            return Results.Ok(new { activeScenario = (string?)null });
         }
 
         var poPlan = repository.GetPOPlan(activeSlit.PO_Plan_ID);
         if (poPlan == null)
         {
-            return Results.Ok(new { activeScenario = null });
+            return Results.Ok(new { activeScenario = (string?)null });
         }
 
         // Determine scenario name from PO_No
-        string scenarioName = null;
+        string? scenarioName = null;
         if (poPlan.PO_No != null && poPlan.PO_No.StartsWith("PO_TEST_CASE"))
         {
             scenarioName = poPlan.PO_No.Replace("PO_TEST_", "");
