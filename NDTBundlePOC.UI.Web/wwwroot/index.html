@@ -964,6 +964,7 @@
         <div class="filter-row" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #0078D7; background: #f8f9fa;">
             <div class="filter-actions" style="width: 100%; justify-content: flex-start; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-success" onclick="openPOPlanManagement()" style="min-width: 140px; font-weight: bold;">Manage PO Plans</button>
+                <button class="btn btn-info" onclick="openTestCaseLoader()" style="min-width: 160px; font-weight: bold;">📋 Load Test Case</button>
                 <button class="btn btn-success" id="btnPLCPolling" onclick="togglePLCPolling()" style="min-width: 140px; font-weight: bold;">Start PLC Polling</button>
                 <button class="btn btn-warning" id="btnPrintMode" onclick="togglePrintMode()" style="min-width: 180px; font-weight: bold;">Print Mode: Loading...</button>
                 <button class="btn btn-primary-bold" onclick="printSelectedBundles(false)">Print Bundles</button>
@@ -1121,6 +1122,27 @@
             <div class="modal-actions">
                 <button class="btn btn-primary" onclick="savePOPlan()">Save</button>
                 <button class="btn btn-secondary" onclick="closePOPlanEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Case Loader Modal -->
+    <div id="testCaseModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2 class="modal-title">📋 Load Test Case</h2>
+                <span class="close" onclick="closeTestCaseModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; color: #666;">Select a test case to load. This will:</p>
+                <ul style="margin-left: 20px; margin-bottom: 20px; color: #666;">
+                    <li>Clean up existing test data (test PO Plans, Slits, and Bundles)</li>
+                    <li>Load the selected test case configuration</li>
+                    <li>Create a new active PO Plan and Slit</li>
+                </ul>
+                <div id="testCaseList" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Test cases will be loaded here -->
+                </div>
             </div>
         </div>
     </div>
@@ -2288,15 +2310,112 @@
             }
         }
 
+        // Test Case Loader Functions
+        async function openTestCaseLoader() {
+            const modal = document.getElementById('testCaseModal');
+            const listDiv = document.getElementById('testCaseList');
+            
+            // Show loading state
+            listDiv.innerHTML = '<p style="text-align: center; padding: 20px;">Loading test cases...</p>';
+            modal.style.display = 'block';
+            
+            // Load test case list
+            try {
+                const response = await fetch('/api/test-cases/list');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const testCases = await response.json();
+                
+                listDiv.innerHTML = '';
+                if (testCases.length === 0) {
+                    listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No test cases available</p>';
+                    return;
+                }
+                
+                testCases.forEach(testCase => {
+                    const div = document.createElement('div');
+                    div.className = 'test-case-item';
+                    div.style.cssText = 'padding: 15px; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; background: #f9f9f9; margin-bottom: 10px; transition: background 0.2s;';
+                    div.onmouseover = () => div.style.background = '#e9e9e9';
+                    div.onmouseout = () => div.style.background = '#f9f9f9';
+                    div.innerHTML = `
+                        <h3 style="margin: 0 0 8px 0; color: #0078D7;">${testCase.name}</h3>
+                        <p style="margin: 0 0 5px 0; color: #666; font-size: 0.95em;">${testCase.description}</p>
+                        <p style="margin: 0; color: #888; font-size: 0.85em;"><strong>PLC Counts:</strong> ${testCase.plcCounts}</p>
+                    `;
+                    div.onclick = () => loadTestCase(testCase.id, testCase.name);
+                    listDiv.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading test cases:', error);
+                listDiv.innerHTML = `<p style="text-align: center; padding: 20px; color: #dc3545;">Error loading test cases: ${error.message}</p>`;
+            }
+        }
+
+        function closeTestCaseModal() {
+            document.getElementById('testCaseModal').style.display = 'none';
+        }
+
+        async function loadTestCase(testCaseId, testCaseName) {
+            if (!confirm(`Load ${testCaseName}?\n\nThis will:\n• Clean up existing test data\n• Load the selected test case configuration\n• Create a new active PO Plan and Slit\n\nContinue?`)) {
+                return;
+            }
+
+            const modal = document.getElementById('testCaseModal');
+            const listDiv = document.getElementById('testCaseList');
+            const originalContent = listDiv.innerHTML;
+            
+            // Show loading state
+            listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #0078D7;">Loading test case...</p>';
+
+            try {
+                const response = await fetch(`/api/test-cases/load/${testCaseId}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addActivityLog(`✓ Test case '${testCaseName}' loaded successfully`);
+                    closeTestCaseModal();
+                    
+                    // Reload PO Plans and bundles after a short delay
+                    setTimeout(() => {
+                        loadPOPlans();
+                        loadBundles();
+                    }, 500);
+                    
+                    // Show success message
+                    alert(`✓ Test case '${testCaseName}' loaded successfully!\n\nYou can now start PLC polling to test the scenario.`);
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error loading test case:', error);
+                listDiv.innerHTML = originalContent;
+                alert('✗ Failed to load test case: ' + error.message);
+            }
+        }
+
         // Close modals when clicking outside
         window.onclick = function(event) {
             const poPlanModal = document.getElementById('poPlanModal');
             const poPlanEditModal = document.getElementById('poPlanEditModal');
+            const testCaseModal = document.getElementById('testCaseModal');
             if (event.target === poPlanModal) {
                 closePOPlanModal();
             }
             if (event.target === poPlanEditModal) {
                 closePOPlanEditModal();
+            }
+            if (event.target === testCaseModal) {
+                closeTestCaseModal();
             }
         }
     </script>

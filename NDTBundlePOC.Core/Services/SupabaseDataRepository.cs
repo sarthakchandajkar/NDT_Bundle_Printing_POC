@@ -637,6 +637,41 @@ namespace NDTBundlePOC.Core.Services
         {
             // Not needed for Supabase repository - data comes from database
         }
+
+        public void ExecuteSqlScript(string sqlScript)
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                // PostgreSQL NpgsqlCommand can execute multiple statements
+                // Split by semicolon and execute each statement separately for better error handling
+                var statements = sqlScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                
+                foreach (var statement in statements)
+                {
+                    if (string.IsNullOrWhiteSpace(statement) || statement.StartsWith("--"))
+                        continue;
+                        
+                    using (var cmd = new NpgsqlCommand(statement, conn))
+                    {
+                        try
+                        {
+                            cmd.ExecuteNonQuery();
+                        }
+                        catch (NpgsqlException ex)
+                        {
+                            // Log but continue - some statements might fail (e.g., ON CONFLICT DO NOTHING when no conflict)
+                            Console.WriteLine($"⚠ SQL statement warning: {ex.Message}");
+                            // Only throw if it's a critical error
+                            if (!ex.Message.Contains("does not exist") && !ex.Message.Contains("already exists"))
+                            {
+                                throw;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

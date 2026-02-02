@@ -794,6 +794,99 @@ app.MapPost("/api/print-mode", (IPrintModeService printModeService, PrintModeReq
     }
 });
 
+// Test Case Management API endpoints
+app.MapGet("/api/test-cases/list", () =>
+{
+    var testCases = new[]
+    {
+        new { 
+            id = "TestCase1", 
+            name = "Test Case 1: Single Bundles", 
+            description = "1 OK tag (42 pieces), 1 NDT tag (20 pieces)",
+            plcCounts = "OK = 42, NDT = 20"
+        },
+        new { 
+            id = "TestCase2", 
+            name = "Test Case 2: Multiple Bundles", 
+            description = "2 OK tags (21+21 pieces), 1 NDT tag (20 pieces)",
+            plcCounts = "OK = 42, NDT = 20"
+        },
+        new { 
+            id = "TestCase3", 
+            name = "Test Case 3: Partial Bundles", 
+            description = "3 OK tags (20+20+2 pieces), 1 NDT tag (20 pieces - partial)",
+            plcCounts = "OK = 42, NDT = 20"
+        }
+    };
+    return Results.Ok(testCases);
+});
+
+app.MapPost("/api/test-cases/load/{testCaseName}", async (IDataRepository repository, string testCaseName) =>
+{
+    try
+    {
+        // Map test case names to SQL file paths
+        var testCaseFiles = new Dictionary<string, string>
+        {
+            { "TestCase1", "TestCase1_SingleBundles.sql" },
+            { "TestCase2", "TestCase2_MultipleBundles.sql" },
+            { "TestCase3", "TestCase3_PartialBundles.sql" }
+        };
+
+        if (!testCaseFiles.ContainsKey(testCaseName))
+        {
+            return Results.BadRequest(new { success = false, message = $"Test case '{testCaseName}' not found" });
+        }
+
+        string sqlFileName = testCaseFiles[testCaseName];
+        
+        // Try multiple paths to find the SQL file
+        var possiblePaths = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Database", "TestCases", sqlFileName),
+            Path.Combine(AppContext.BaseDirectory, "Database", "TestCases", sqlFileName),
+            Path.Combine(Directory.GetCurrentDirectory(), "Database", "TestCases", sqlFileName),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "Database", "TestCases", sqlFileName)
+        };
+
+        string? sqlFilePath = null;
+        foreach (var path in possiblePaths)
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (File.Exists(fullPath))
+            {
+                sqlFilePath = fullPath;
+                break;
+            }
+        }
+
+        if (sqlFilePath == null)
+        {
+            Console.WriteLine($"✗ Test case file not found. Searched paths:");
+            foreach (var path in possiblePaths)
+            {
+                Console.WriteLine($"  → {Path.GetFullPath(path)}");
+            }
+            return Results.BadRequest(new { success = false, message = $"Test case file not found: {sqlFileName}. Please ensure the file exists in Database/TestCases/" });
+        }
+
+        Console.WriteLine($"📂 Loading test case '{testCaseName}' from: {sqlFilePath}");
+        string sqlScript = await File.ReadAllTextAsync(sqlFilePath);
+        
+        // Execute SQL script
+        repository.ExecuteSqlScript(sqlScript);
+
+        Console.WriteLine($"✓ Test case '{testCaseName}' loaded successfully");
+        return Results.Ok(new { success = true, message = $"Test case '{testCaseName}' loaded successfully" });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ Error loading test case '{testCaseName}': {ex.Message}");
+        Console.WriteLine($"  Stack trace: {ex.StackTrace}");
+        return Results.BadRequest(new { success = false, message = $"Error loading test case: {ex.Message}" });
+    }
+});
+
 app.MapPost("/api/test-print", (IPrinterService printerService) =>
 {
     try

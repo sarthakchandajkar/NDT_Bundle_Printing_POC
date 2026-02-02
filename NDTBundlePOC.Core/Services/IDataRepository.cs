@@ -28,6 +28,9 @@ namespace NDTBundlePOC.Core.Services
         
         // Initialize with dummy data
         void InitializeDummyData();
+        
+        // Execute raw SQL (for test cases, migrations, etc.)
+        void ExecuteSqlScript(string sqlScript);
     }
 }
 

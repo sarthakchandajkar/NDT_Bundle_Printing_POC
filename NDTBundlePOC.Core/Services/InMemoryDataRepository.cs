@@ -14,6 +14,13 @@ namespace NDTBundlePOC.Core.Services
         private int _nextBundleId = 1;
         private int _nextSlitId = 1;
 
+        public void ExecuteSqlScript(string sqlScript)
+        {
+            // In-memory repository doesn't support SQL execution
+            // This is only for Supabase/PostgreSQL repositories
+            throw new NotSupportedException("SQL script execution is not supported in InMemoryDataRepository. Use SupabaseDataRepository for test case loading.");
+        }
+
         public void InitializeDummyData()
         {
             // Initialize Formation Chart with size-based configuration
