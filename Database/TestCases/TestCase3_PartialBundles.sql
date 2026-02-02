@@ -3,9 +3,9 @@
 -- PLC Counts: OK = 42, NDT = 20
 
 -- Cleanup: Close all existing slits and clear test data
+-- Note: OK bundles are stored in-memory only, so they don't need database cleanup
 UPDATE "M1_Slit" SET "Status" = 3 WHERE "Slit_No" LIKE 'SLIT_TEST_%';
 DELETE FROM "M1_NDTBundles" WHERE "Bundle_No" LIKE '%TEST%' OR "Bundle_No" LIKE 'PO_TEST%' OR "Bundle_No" LIKE '0%';
-DELETE FROM "M1_OKBundles" WHERE "Bundle_No" LIKE '%TEST%' OR "Bundle_No" LIKE 'PO_TEST%';
 DELETE FROM "PO_Plan" WHERE "PO_No" LIKE 'PO_TEST%';
 
 -- Create PO_Plan for Test Case 3
