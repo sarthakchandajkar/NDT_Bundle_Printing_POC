@@ -643,17 +643,101 @@ namespace NDTBundlePOC.Core.Services
             using (var conn = GetConnection())
             {
                 conn.Open();
-                // PostgreSQL NpgsqlCommand can execute multiple statements
-                // Split by semicolon and execute each statement separately for better error handling
-                var statements = sqlScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 
+                // Handle DO blocks specially - they contain semicolons but must be executed as single statements
+                // Use a smarter parser that detects DO blocks and keeps them together
+                var statements = new List<string>();
+                var currentStatement = new System.Text.StringBuilder();
+                bool inDoBlock = false;
+                string doBlockTag = null; // Track the tag used ($$ or $tag$)
+                
+                // Split by lines to process
+                var lines = sqlScript.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+                
+                foreach (var line in lines)
+                {
+                    string trimmedLine = line.Trim();
+                    
+                    // Skip empty lines and comments
+                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("--"))
+                    {
+                        if (inDoBlock)
+                            currentStatement.AppendLine(line); // Keep comments inside DO blocks
+                        continue;
+                    }
+                    
+                    // Check if we're entering a DO block
+                    if (!inDoBlock && trimmedLine.StartsWith("DO ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inDoBlock = true;
+                        currentStatement.Clear();
+                        // Extract the tag ($$ or $tag$)
+                        if (trimmedLine.Contains("$$"))
+                            doBlockTag = "$$";
+                        else if (trimmedLine.Contains("$"))
+                        {
+                            // Extract custom tag like $tag$
+                            int start = trimmedLine.IndexOf('$');
+                            int end = trimmedLine.IndexOf('$', start + 1);
+                            if (end > start)
+                                doBlockTag = trimmedLine.Substring(start, end - start + 1);
+                            else
+                                doBlockTag = "$$";
+                        }
+                        else
+                            doBlockTag = "$$";
+                    }
+                    
+                    if (inDoBlock)
+                    {
+                        currentStatement.AppendLine(line);
+                        
+                        // Check if DO block is complete (END $$; or END $tag$;)
+                        if (doBlockTag != null && trimmedLine.Contains($"END {doBlockTag}"))
+                        {
+                            string fullStatement = currentStatement.ToString().Trim();
+                            if (!string.IsNullOrEmpty(fullStatement))
+                            {
+                                statements.Add(fullStatement);
+                            }
+                            currentStatement.Clear();
+                            inDoBlock = false;
+                            doBlockTag = null;
+                        }
+                    }
+                    else
+                    {
+                        // Regular statement - accumulate until semicolon
+                        currentStatement.AppendLine(line);
+                        
+                        // If line ends with semicolon, it's a complete statement
+                        if (trimmedLine.EndsWith(";"))
+                        {
+                            string stmt = currentStatement.ToString().Trim();
+                            if (!string.IsNullOrEmpty(stmt))
+                            {
+                                statements.Add(stmt);
+                            }
+                            currentStatement.Clear();
+                        }
+                    }
+                }
+                
+                // Add any remaining statement
+                if (currentStatement.Length > 0)
+                {
+                    string stmt = currentStatement.ToString().Trim();
+                    if (!string.IsNullOrEmpty(stmt))
+                    {
+                        statements.Add(stmt);
+                    }
+                }
+                
+                // Execute each statement
                 int statementNumber = 0;
                 foreach (var statement in statements)
                 {
                     statementNumber++;
-                    if (string.IsNullOrWhiteSpace(statement) || statement.TrimStart().StartsWith("--"))
-                        continue;
-                    
                     string trimmedStatement = statement.Trim();
                     if (string.IsNullOrEmpty(trimmedStatement))
                         continue;
