@@ -1202,8 +1202,10 @@
                 .build();
 
             heartbeatConnection.on("HeartbeatUpdate", function(data) {
-                // Update header heartbeat display
-                updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
+                // Don't update header heartbeat from SignalR - use PLC connection status instead
+                // The header heartbeat is now updated by updatePLCStatusDisplay() and checkPLCStatus()
+                // This ensures it shows the actual PLC connection status, not SignalR status
+                // updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
             });
 
             heartbeatConnection.start()
@@ -1217,9 +1219,9 @@
                 });
 
             heartbeatConnection.onreconnecting(function() {
-                // Only update heartbeat indicator, NOT the PLC connection status
-                // The PLC connection status should be independent of SignalR connection
-                updateHeartbeatDisplay(-1, "RECONNECTING");
+                // Don't update header heartbeat on SignalR reconnection
+                // The header heartbeat should reflect PLC connection status, not SignalR status
+                // updateHeartbeatDisplay(-1, "RECONNECTING");
             });
 
             heartbeatConnection.onreconnected(function() {
@@ -1229,15 +1231,18 @@
         }
 
         // Fetch heartbeat status via REST API (fallback)
+        // Note: This is no longer used to update the header heartbeat indicator
+        // The header heartbeat now uses the actual PLC connection status from PLC Connection section
         async function fetchHeartbeatStatus() {
             try {
                 const response = await fetch('/api/plc/heartbeat');
                 const data = await response.json();
-                // Update header heartbeat display
-                updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
+                // Don't update header heartbeat - it's now managed by PLC connection status
+                // updateHeartbeatDisplay(data.heartbeatValue, data.plcStatus);
             } catch (error) {
                 console.error('Error fetching heartbeat status:', error);
-                updateHeartbeatDisplay(-1, "ERROR");
+                // Don't update header heartbeat - it's now managed by PLC connection status
+                // updateHeartbeatDisplay(-1, "ERROR");
             }
         }
 
@@ -1783,16 +1788,49 @@
                 statusDot.className = 'status-dot online';
                 statusText.textContent = 'CONNECTED';
                 statusText.style.color = '#28a745';
+                    
+                    // Also update top right heartbeat indicator to match PLC Connection status
+                    updateHeaderHeartbeatFromPLCStatus(true);
             } else {
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'DISCONNECTED';
-                    statusText.style.color = '#dc3545';
+                statusText.style.color = '#dc3545';
+                    
+                    // Also update top right heartbeat indicator to match PLC Connection status
+                    updateHeaderHeartbeatFromPLCStatus(false);
                 }
             } else {
                 // Invalid data - set to unknown/disconnected
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'UNKNOWN';
                 statusText.style.color = '#dc3545';
+                
+                // Also update top right heartbeat indicator
+                updateHeaderHeartbeatFromPLCStatus(false);
+            }
+        }
+        
+        // Update top right heartbeat indicator based on PLC connection status (not SignalR status)
+        function updateHeaderHeartbeatFromPLCStatus(isConnected) {
+            const indicator = document.getElementById('heartbeatIndicator');
+            const statusElement = document.getElementById('heartbeatStatus');
+            const valueElement = document.getElementById('heartbeatValue');
+            
+            if (!indicator || !statusElement || !valueElement) {
+                return;
+            }
+            
+            // Remove all status classes
+            indicator.className = 'heartbeat-indicator';
+            
+            if (isConnected) {
+                indicator.classList.add('heartbeat-online');
+                statusElement.textContent = 'ONLINE';
+                valueElement.textContent = '(✓)';
+            } else {
+                indicator.classList.add('heartbeat-error');
+                statusElement.textContent = 'OFFLINE';
+                valueElement.textContent = '(-)';
             }
         }
 
@@ -1832,16 +1870,25 @@
                     statusDot.className = 'status-dot online';
                     statusText.textContent = 'CONNECTED';
                     statusText.style.color = '#28a745';
+                        
+                        // Also update top right heartbeat indicator to match PLC Connection status
+                        updateHeaderHeartbeatFromPLCStatus(true);
                 } else {
                     statusDot.className = 'status-dot offline';
                     statusText.textContent = 'DISCONNECTED';
-                        statusText.style.color = '#dc3545';
+                    statusText.style.color = '#dc3545';
+                        
+                        // Also update top right heartbeat indicator to match PLC Connection status
+                        updateHeaderHeartbeatFromPLCStatus(false);
                     }
                 } else {
                     // Invalid response
                     statusDot.className = 'status-dot offline';
                     statusText.textContent = 'UNKNOWN';
                     statusText.style.color = '#dc3545';
+                    
+                    // Also update top right heartbeat indicator
+                    updateHeaderHeartbeatFromPLCStatus(false);
                 }
             } catch (error) {
                 const statusDot = document.getElementById('plcStatusDot');
@@ -1850,6 +1897,9 @@
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'ERROR';
                 statusText.style.color = '#dc3545';
+                    
+                    // Also update top right heartbeat indicator
+                    updateHeaderHeartbeatFromPLCStatus(false);
                 }
                 console.error('Error checking PLC status:', error);
             }
