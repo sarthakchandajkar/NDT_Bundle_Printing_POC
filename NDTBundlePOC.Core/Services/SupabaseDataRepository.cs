@@ -667,17 +667,31 @@ namespace NDTBundlePOC.Core.Services
                         }
                         catch (NpgsqlException ex)
                         {
-                            // Log but continue - some statements might fail (e.g., ON CONFLICT DO NOTHING when no conflict)
-                            Console.WriteLine($"⚠ SQL statement #{statementNumber} warning: {ex.Message}");
-                            Console.WriteLine($"  Statement: {trimmedStatement.Substring(0, Math.Min(100, trimmedStatement.Length))}...");
-                            // Only throw if it's a critical error
+                            // Log the error with full details
+                            Console.WriteLine($"✗ SQL statement #{statementNumber} error: {ex.Message}");
+                            Console.WriteLine($"  Code: {ex.SqlState}");
+                            Console.WriteLine($"  Statement: {trimmedStatement.Substring(0, Math.Min(200, trimmedStatement.Length))}...");
+                            
+                            // Only throw if it's a critical error (not a warning we can ignore)
                             if (!ex.Message.Contains("does not exist") && 
                                 !ex.Message.Contains("already exists") &&
                                 !ex.Message.Contains("42P01") && // relation does not exist
-                                !ex.Message.Contains("ON CONFLICT"))
+                                !ex.Message.Contains("ON CONFLICT") &&
+                                !ex.Message.Contains("42P10")) // no unique constraint (handled by DO blocks now)
                             {
+                                Console.WriteLine($"  → Throwing exception for critical error");
                                 throw;
                             }
+                            else
+                            {
+                                Console.WriteLine($"  → Continuing (non-critical error)");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"✗ SQL statement #{statementNumber} unexpected error: {ex.Message}");
+                            Console.WriteLine($"  Statement: {trimmedStatement.Substring(0, Math.Min(200, trimmedStatement.Length))}...");
+                            throw;
                         }
                     }
                 }
