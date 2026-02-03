@@ -1151,7 +1151,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@7.0.0/dist/browser/signalr.min.js"></script>
 
     <script>
-        let allBundles = [];
+        let allBundles = []; // NDT bundles
+        let allOKBundles = []; // OK bundles
         let filteredBundles = [];
         let selectedBundleIds = new Set();
         let activeShops = new Set();
@@ -1171,7 +1172,7 @@
             document.getElementById('dtpFrom').value = formatDateForInput(oneMonthAgo);
             document.getElementById('dtpTo').value = formatDateForInput(now);
             
-            loadBundles();
+            loadBundles(); // This will also call updateNDTCounts, updateOKCounts, and updateBundleStatus
             initializeFilters();
             initializeHeartbeatConnection();
             
@@ -1604,7 +1605,13 @@
 
             updateStatus(`Printed ${successCount} of ${bundleIds.length} bundles`);
             await loadBundles();
-            refreshSystemStatus();
+            // Explicitly refresh all statistics after printing
+            await Promise.all([
+                updateNDTCounts(),
+                updateOKCounts(),
+                updateBundleStatus(),
+                refreshSystemStatus()
+            ]);
         }
 
         function contextPrint(isReprint) {
@@ -1818,17 +1825,15 @@
                 // Get bundles data
                 const bundlesResponse = await fetch('/api/bundles');
                 const bundles = await bundlesResponse.json();
+                allBundles = bundles; // Update global NDT bundles
                 
                 // Calculate statistics
                 const totalNDTPcs = bundles.reduce((sum, b) => sum + (b.ndt_Pcs || 0), 0);
-                const printedCount = bundles.filter(b => b.status === 3).length;
+                const printedCount = bundles.filter(b => b.status === 3 || b.Status === 3).length;
                 
                 document.getElementById('totalNDTInBundles').textContent = totalNDTPcs;
                 document.getElementById('bundlesCreated').textContent = bundles.length;
                 document.getElementById('tagsPrinted').textContent = printedCount;
-                
-                // Update bundle status
-                updateBundleStatus();
             } catch (error) {
                 console.error('Error updating NDT counts:', error);
             }
@@ -1839,6 +1844,7 @@
                 // Get OK bundles data
                 const bundlesResponse = await fetch('/api/ok-bundles');
                 const bundles = await bundlesResponse.json();
+                allOKBundles = bundles; // Update global OK bundles
                 
                 // Calculate statistics - handle both camelCase and snake_case property names
                 const totalOKPcs = bundles.reduce((sum, b) => sum + (b.ok_Pcs || b.okPcs || 0), 0);
@@ -1852,14 +1858,32 @@
             }
         }
 
-        function updateBundleStatus() {
-            const active = allBundles.filter(b => b.status === 1).length;
-            const ready = allBundles.filter(b => b.status === 2).length;
-            const printed = allBundles.filter(b => b.status === 3).length;
+        async function updateBundleStatus() {
+            try {
+                // Fetch both OK and NDT bundles if not already loaded
+                if (allBundles.length === 0) {
+                    const ndtResponse = await fetch('/api/bundles');
+                    allBundles = await ndtResponse.json();
+                }
+                if (allOKBundles.length === 0) {
+                    const okResponse = await fetch('/api/ok-bundles');
+                    allOKBundles = await okResponse.json();
+                }
+                
+                // Combine both OK and NDT bundles for status calculation
+                const allCombinedBundles = [...allBundles, ...allOKBundles];
+                
+                // Calculate status counts - handle both camelCase and snake_case
+                const active = allCombinedBundles.filter(b => (b.status === 1 || b.Status === 1)).length;
+                const ready = allCombinedBundles.filter(b => (b.status === 2 || b.Status === 2)).length;
+                const printed = allCombinedBundles.filter(b => (b.status === 3 || b.Status === 3)).length;
             
             document.getElementById('activeBundles').textContent = active;
             document.getElementById('readyBundles').textContent = ready;
             document.getElementById('printedBundles').textContent = printed;
+            } catch (error) {
+                console.error('Error updating bundle status:', error);
+            }
         }
 
         function addActivityLog(message) {
@@ -1881,44 +1905,86 @@
         }
 
 
-        // Enhanced loadBundles to add activity log
+        // Enhanced loadBundles to add activity log and update statistics
         const originalLoadBundles = loadBundles;
         loadBundles = async function() {
             await originalLoadBundles();
-            updateBundleStatus();
-            updateNDTCounts();
+            await Promise.all([
+                updateNDTCounts(),
+                updateOKCounts(),
+                updateBundleStatus()
+            ]);
         };
 
         // Monitor for new bundles and status changes (check every 3 seconds)
         setInterval(async function() {
             try {
-                const response = await fetch('/api/bundles');
-                const newBundles = await response.json();
+                // Check both NDT and OK bundles
+                const [ndtResponse, okResponse] = await Promise.all([
+                    fetch('/api/bundles'),
+                    fetch('/api/ok-bundles')
+                ]);
                 
-                // Check for new bundles
-                if (newBundles.length !== allBundles.length) {
-                    const newCount = newBundles.length - allBundles.length;
+                const newNDTBundles = await ndtResponse.json();
+                const newOKBundles = await okResponse.json();
+                
+                // Check for new NDT bundles
+                if (newNDTBundles.length !== allBundles.length) {
+                    const newCount = newNDTBundles.length - allBundles.length;
                     if (newCount > 0) {
-                        addActivityLog(`✓ New bundle created: ${newCount} bundle(s) added`);
+                        addActivityLog(`✓ New NDT bundle created: ${newCount} bundle(s) added`);
                         await loadBundles();
                         refreshSystemStatus();
                     }
                 }
                 
-                // Check for status changes
-                newBundles.forEach(newBundle => {
+                // Check for new OK bundles
+                if (newOKBundles.length !== allOKBundles.length) {
+                    const newCount = newOKBundles.length - allOKBundles.length;
+                    if (newCount > 0) {
+                        addActivityLog(`✓ New OK bundle created: ${newCount} bundle(s) added`);
+                        await Promise.all([updateOKCounts(), updateBundleStatus()]);
+                        refreshSystemStatus();
+                    }
+                }
+                
+                // Check for NDT bundle status changes
+                newNDTBundles.forEach(newBundle => {
                     const oldBundle = allBundles.find(b => b.ndtBundle_ID === newBundle.ndtBundle_ID);
-                    if (oldBundle && oldBundle.status !== newBundle.status) {
-                        if (newBundle.status === 2) {
-                            addActivityLog(`✓ Bundle ${newBundle.bundle_No} ready for printing (${newBundle.ndt_Pcs} pipes)`);
-                        } else if (newBundle.status === 3) {
-                            addActivityLog(`✓ Bundle ${newBundle.bundle_No} printed successfully`);
+                    const newStatus = newBundle.status || newBundle.Status;
+                    const oldStatus = oldBundle ? (oldBundle.status || oldBundle.Status) : null;
+                    if (oldBundle && oldStatus !== newStatus) {
+                        if (newStatus === 2) {
+                            addActivityLog(`✓ NDT Bundle ${newBundle.bundle_No || newBundle.bundleNo} ready for printing (${newBundle.ndt_Pcs || newBundle.ndtPcs} pipes)`);
+                        } else if (newStatus === 3) {
+                            addActivityLog(`✓ NDT Bundle ${newBundle.bundle_No || newBundle.bundleNo} printed successfully`);
                         }
+                        // Refresh statistics when status changes
+                        updateNDTCounts();
+                        updateBundleStatus();
                     }
                 });
                 
-                // Update allBundles for next comparison
-                allBundles = newBundles;
+                // Check for OK bundle status changes
+                newOKBundles.forEach(newBundle => {
+                    const oldBundle = allOKBundles.find(b => b.okBundle_ID === newBundle.okBundle_ID);
+                    const newStatus = newBundle.status || newBundle.Status;
+                    const oldStatus = oldBundle ? (oldBundle.status || oldBundle.Status) : null;
+                    if (oldBundle && oldStatus !== newStatus) {
+                        if (newStatus === 2) {
+                            addActivityLog(`✓ OK Bundle ${newBundle.bundle_No || newBundle.bundleNo} ready for printing (${newBundle.ok_Pcs || newBundle.okPcs} pipes)`);
+                        } else if (newStatus === 3) {
+                            addActivityLog(`✓ OK Bundle ${newBundle.bundle_No || newBundle.bundleNo} printed successfully`);
+                        }
+                        // Refresh statistics when status changes
+                        updateOKCounts();
+                        updateBundleStatus();
+                    }
+                });
+                
+                // Update bundles for next comparison
+                allBundles = newNDTBundles;
+                allOKBundles = newOKBundles;
             } catch (error) {
                 console.error('Error checking for new bundles:', error);
             }
@@ -2248,7 +2314,7 @@
             btn.disabled = true;
             
             try {
-                if (isPollingActive) {
+            if (isPollingActive) {
                     // Stop polling
                     const response = await fetch('/api/plc/polling/stop', {
                         method: 'POST'
@@ -2256,25 +2322,25 @@
                     const result = await response.json();
                     
                     if (result.success) {
-                        isPollingActive = false;
-                        btn.textContent = 'Start PLC Polling';
-                        btn.className = 'btn btn-success';
+                isPollingActive = false;
+                btn.textContent = 'Start PLC Polling';
+                btn.className = 'btn btn-success';
                         addActivityLog('PLC polling stopped');
                         updateStatus('PLC polling stopped');
                     } else {
                         alert('Failed to stop polling: ' + (result.message || 'Unknown error'));
                     }
-                } else {
-                    // Start polling
+            } else {
+                // Start polling
                     const response = await fetch('/api/plc/polling/start', {
                         method: 'POST'
                     });
                     const result = await response.json();
                     
                     if (result.success) {
-                        isPollingActive = true;
-                        btn.textContent = 'Stop PLC Polling';
-                        btn.className = 'btn btn-danger';
+                isPollingActive = true;
+                btn.textContent = 'Stop PLC Polling';
+                btn.className = 'btn btn-danger';
                         addActivityLog('PLC polling started');
                         updateStatus('PLC polling started');
                     } else {
@@ -2385,10 +2451,21 @@
                     addActivityLog(`✓ Test case '${testCaseName}' loaded successfully`);
                     closeTestCaseModal();
                     
+                    // Reset bundle arrays
+                    allBundles = [];
+                    allOKBundles = [];
+                    
                     // Reload PO Plans and bundles after a short delay
-                    setTimeout(() => {
-                        loadPOPlans();
-                        loadBundles();
+                    setTimeout(async () => {
+                        await loadPOPlans();
+                        await loadBundles();
+                        // Refresh all statistics
+                        await Promise.all([
+                            updateNDTCounts(),
+                            updateOKCounts(),
+                            updateBundleStatus(),
+                            refreshSystemStatus()
+                        ]);
                     }, 500);
                     
                     // Show success message

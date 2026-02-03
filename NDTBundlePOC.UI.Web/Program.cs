@@ -821,10 +821,29 @@ app.MapGet("/api/test-cases/list", () =>
     return Results.Ok(testCases);
 });
 
-app.MapPost("/api/test-cases/load/{testCaseName}", async (IDataRepository repository, string testCaseName) =>
+app.MapPost("/api/test-cases/load/{testCaseName}", async (
+    IDataRepository repository, 
+    IControllablePLCPollingService pollingService,
+    IOKBundleService okBundleService,
+    string testCaseName) =>
 {
     try
     {
+        // Stop polling if running (to reset state cleanly)
+        bool wasPolling = pollingService.IsPolling;
+        if (wasPolling)
+        {
+            Console.WriteLine("⏸️  Stopping PLC polling to reset state for new test case...");
+            await pollingService.StopAsync();
+            await Task.Delay(500); // Brief delay to ensure polling stops
+        }
+
+        // Reset service states for new test case
+        Console.WriteLine("🔄 Resetting service states for new test case...");
+        pollingService.Reset();
+        okBundleService.Reset();
+        Console.WriteLine("✓ Service states reset");
+
         // Map test case names to SQL file paths
         var testCaseFiles = new Dictionary<string, string>
         {
@@ -877,7 +896,19 @@ app.MapPost("/api/test-cases/load/{testCaseName}", async (IDataRepository reposi
         repository.ExecuteSqlScript(sqlScript);
 
         Console.WriteLine($"✓ Test case '{testCaseName}' loaded successfully");
-        return Results.Ok(new { success = true, message = $"Test case '{testCaseName}' loaded successfully" });
+        
+        // Restart polling if it was running before
+        if (wasPolling)
+        {
+            Console.WriteLine("▶️  Restarting PLC polling...");
+            await pollingService.StartAsync();
+        }
+
+        return Results.Ok(new { 
+            success = true, 
+            message = $"Test case '{testCaseName}' loaded successfully. Service states have been reset.",
+            pollingRestarted = wasPolling
+        });
     }
     catch (Exception ex)
     {

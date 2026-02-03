@@ -24,6 +24,9 @@ namespace NDTBundlePOC.Core.Services
         
         // Get total OK pipes processed for a PO
         int GetTotalOKPipesProcessed(int poPlanId);
+        
+        // Reset state for new test case
+        void Reset();
     }
 
     public class OKBundlePrintData
@@ -444,6 +447,16 @@ namespace NDTBundlePOC.Core.Services
             {
                 Console.WriteLine($"✗ Error printing OK bundle tag: {ex.Message}");
                 return false;
+            }
+        }
+
+        public void Reset()
+        {
+            lock (_lock)
+            {
+                _okBundles.Clear();
+                _nextOKBundleId = 1;
+                Console.WriteLine("🔄 OK Bundle Service state reset - cleared all in-memory bundles");
             }
         }
     }

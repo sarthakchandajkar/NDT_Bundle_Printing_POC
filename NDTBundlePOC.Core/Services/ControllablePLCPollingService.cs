@@ -18,6 +18,7 @@ namespace NDTBundlePOC.Core.Services
         bool Stop();
         Task<bool> StartAsync();
         Task<bool> StopAsync();
+        void Reset(); // Reset state for new test case
     }
 
     public class ControllablePLCPollingService : IControllablePLCPollingService
@@ -337,6 +338,21 @@ namespace NDTBundlePOC.Core.Services
             }
 
             _logger?.LogInformation("PLC Polling loop stopped");
+        }
+
+        public void Reset()
+        {
+            lock (_lockObject)
+            {
+                _previousOKCuts = 0;
+                _previousNDTCuts = 0;
+                _previousOKBundleDone = false;
+                _previousNDTBundleDone = false;
+                _isInitialized = false;
+                _totalOKTagsPrinted = 0;
+                _totalNDTTagsPrinted = 0;
+                _logger?.LogInformation("🔄 PLC Polling Service state reset for new test case");
+            }
         }
 
         private int ReadOKCuts()
