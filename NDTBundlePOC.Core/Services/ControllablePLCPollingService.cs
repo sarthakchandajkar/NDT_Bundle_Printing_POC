@@ -50,6 +50,9 @@ namespace NDTBundlePOC.Core.Services
         // Track printed tags for summary
         private int _totalOKTagsPrinted = 0;
         private int _totalNDTTagsPrinted = 0;
+        
+        // Track which PO has already had partial bundles closed (to avoid repeated logging)
+        private int? _poPlanIdWithClosedBundles = null;
 
         public bool IsPolling 
         { 
@@ -351,6 +354,7 @@ namespace NDTBundlePOC.Core.Services
                 _isInitialized = false;
                 _totalOKTagsPrinted = 0;
                 _totalNDTTagsPrinted = 0;
+                _poPlanIdWithClosedBundles = null; // Reset PO completion tracking
                 _logger?.LogInformation("🔄 PLC Polling Service state reset for new test case");
             }
         }
@@ -564,6 +568,14 @@ namespace NDTBundlePOC.Core.Services
 
                 _logger?.LogDebug($"🔍 PO completion check: allOKProcessed={allOKProcessed} ({totalOKProcessed}>={currentOKCuts}), allNDTProcessed={allNDTProcessed} ({totalNDTProcessed}>={currentNDTCuts})");
 
+                // Check if we've already processed this PO
+                if (_poPlanIdWithClosedBundles == poPlan.PO_Plan_ID)
+                {
+                    // Already processed this PO - skip to avoid repeated logging
+                    _logger?.LogDebug($"🔍 PO completion check: PO {poPlan.PO_No} (ID: {poPlan.PO_Plan_ID}) already processed. Skipping.");
+                    return;
+                }
+
                 if (allOKProcessed && allNDTProcessed && (totalOKProcessed > 0 || totalNDTProcessed > 0))
                 {
                     // PO is complete - close any partial bundles
@@ -571,6 +583,9 @@ namespace NDTBundlePOC.Core.Services
                     
                     _okBundleService.ClosePartialBundlesForPO(poPlan.PO_Plan_ID);
                     _ndtBundleService.ClosePartialBundlesForPO(poPlan.PO_Plan_ID);
+                    
+                    // Mark this PO as processed to avoid repeated logging
+                    _poPlanIdWithClosedBundles = poPlan.PO_Plan_ID;
                     
                     // After closing partial bundles, check for printing again
                     CheckAndPrintOKBundles();

@@ -1184,6 +1184,8 @@
             setInterval(checkPollingStatus, 5000); // Check every 5 seconds
             
             // Initialize system status monitoring
+            // Check PLC status immediately and independently
+            checkPLCStatus();
             refreshSystemStatus();
             refreshPipeActivity();
             systemStatusInterval = setInterval(() => {
@@ -1215,6 +1217,8 @@
                 });
 
             heartbeatConnection.onreconnecting(function() {
+                // Only update heartbeat indicator, NOT the PLC connection status
+                // The PLC connection status should be independent of SignalR connection
                 updateHeartbeatDisplay(-1, "RECONNECTING");
             });
 
@@ -1657,13 +1661,25 @@
             try {
                 // Get comprehensive system status
                 const response = await fetch('/api/system-status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 
-                // Update PLC Status
+                // Update PLC Status - always use actual PLC connection status
+                if (data.plc) {
                 updatePLCStatusDisplay(data.plc);
+                } else {
+                    // Fallback: check PLC status directly
+                    await checkPLCStatus();
+                }
                 
                 // Update Printer Status
+                if (data.printer) {
                 updatePrinterStatusDisplay(data.printer);
+                } else {
+                    checkPrinterStatus();
+                }
                 
                 // Update Current Pipe Counts (from PLC)
                 if (data.pipeCounts) {
@@ -1672,9 +1688,11 @@
                 }
                 
                 // Update NDT Bundle Statistics
+                if (data.ndtCounts) {
                 document.getElementById('totalNDTInBundles').textContent = data.ndtCounts.totalPipes || 0;
                 document.getElementById('bundlesCreated').textContent = data.ndtCounts.bundlesCreated || 0;
                 document.getElementById('tagsPrinted').textContent = data.ndtCounts.tagsPrinted || 0;
+                }
                 
                 // Update OK Bundle Statistics
                 if (data.okCounts) {
@@ -1684,22 +1702,23 @@
                 }
                 
                 // Update Bundle Status
+                if (data.bundleStatus) {
                 document.getElementById('activeBundles').textContent = data.bundleStatus.active || 0;
                 document.getElementById('readyBundles').textContent = data.bundleStatus.ready || 0;
                 document.getElementById('printedBundles').textContent = data.bundleStatus.printed || 0;
-                
-                addActivityLog('System status refreshed');
+                }
             } catch (error) {
                 console.error('Error refreshing system status:', error);
-                addActivityLog('Error refreshing system status: ' + error.message);
-                // Fallback to individual checks
-                await Promise.all([
-                    checkPLCStatus(),
-                    checkPrinterStatus(),
-                    updateNDTCounts(),
-                    updateOKCounts(),
-                    updateBundleStatus()
-                ]);
+                // Fallback to individual checks - don't log error to activity log to avoid spam
+                try {
+                    await checkPLCStatus();
+                    checkPrinterStatus();
+                    await updateNDTCounts();
+                    await updateOKCounts();
+                    await updateBundleStatus();
+                } catch (fallbackError) {
+                    console.error('Error in fallback status checks:', fallbackError);
+                }
             }
         }
 
@@ -1753,6 +1772,13 @@
             const statusDot = document.getElementById('plcStatusDot');
             const statusText = document.getElementById('plcConnectionStatus');
             
+            if (!statusDot || !statusText) {
+                console.warn('PLC status elements not found');
+                return;
+            }
+            
+            // Only update if plcData is valid and has connected property
+            if (plcData && typeof plcData.connected === 'boolean') {
             if (plcData.connected) {
                 statusDot.className = 'status-dot online';
                 statusText.textContent = 'CONNECTED';
@@ -1760,6 +1786,12 @@
             } else {
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'DISCONNECTED';
+                    statusText.style.color = '#dc3545';
+                }
+            } else {
+                // Invalid data - set to unknown/disconnected
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'UNKNOWN';
                 statusText.style.color = '#dc3545';
             }
         }
@@ -1782,28 +1814,44 @@
         async function checkPLCStatus() {
             try {
                 const response = await fetch('/api/plc/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 
                 const statusDot = document.getElementById('plcStatusDot');
                 const statusText = document.getElementById('plcConnectionStatus');
                 
+                if (!statusDot || !statusText) {
+                    console.warn('PLC status elements not found');
+                    return;
+                }
+                
+                if (data && typeof data.connected === 'boolean') {
                 if (data.connected) {
                     statusDot.className = 'status-dot online';
                     statusText.textContent = 'CONNECTED';
                     statusText.style.color = '#28a745';
-                    addActivityLog('PLC connected successfully');
                 } else {
                     statusDot.className = 'status-dot offline';
                     statusText.textContent = 'DISCONNECTED';
+                        statusText.style.color = '#dc3545';
+                    }
+                } else {
+                    // Invalid response
+                    statusDot.className = 'status-dot offline';
+                    statusText.textContent = 'UNKNOWN';
                     statusText.style.color = '#dc3545';
                 }
             } catch (error) {
                 const statusDot = document.getElementById('plcStatusDot');
                 const statusText = document.getElementById('plcConnectionStatus');
+                if (statusDot && statusText) {
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'ERROR';
                 statusText.style.color = '#dc3545';
-                addActivityLog('Error checking PLC status: ' + error.message);
+                }
+                console.error('Error checking PLC status:', error);
             }
         }
 
