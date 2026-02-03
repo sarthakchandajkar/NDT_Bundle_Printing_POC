@@ -647,23 +647,34 @@ namespace NDTBundlePOC.Core.Services
                 // Split by semicolon and execute each statement separately for better error handling
                 var statements = sqlScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 
+                int statementNumber = 0;
                 foreach (var statement in statements)
                 {
-                    if (string.IsNullOrWhiteSpace(statement) || statement.StartsWith("--"))
+                    statementNumber++;
+                    if (string.IsNullOrWhiteSpace(statement) || statement.TrimStart().StartsWith("--"))
+                        continue;
+                    
+                    string trimmedStatement = statement.Trim();
+                    if (string.IsNullOrEmpty(trimmedStatement))
                         continue;
                         
-                    using (var cmd = new NpgsqlCommand(statement, conn))
+                    using (var cmd = new NpgsqlCommand(trimmedStatement, conn))
                     {
                         try
                         {
-                            cmd.ExecuteNonQuery();
+                            int rowsAffected = cmd.ExecuteNonQuery();
+                            Console.WriteLine($"✓ SQL Statement #{statementNumber} executed: {rowsAffected} row(s) affected");
                         }
                         catch (NpgsqlException ex)
                         {
                             // Log but continue - some statements might fail (e.g., ON CONFLICT DO NOTHING when no conflict)
-                            Console.WriteLine($"⚠ SQL statement warning: {ex.Message}");
+                            Console.WriteLine($"⚠ SQL statement #{statementNumber} warning: {ex.Message}");
+                            Console.WriteLine($"  Statement: {trimmedStatement.Substring(0, Math.Min(100, trimmedStatement.Length))}...");
                             // Only throw if it's a critical error
-                            if (!ex.Message.Contains("does not exist") && !ex.Message.Contains("already exists"))
+                            if (!ex.Message.Contains("does not exist") && 
+                                !ex.Message.Contains("already exists") &&
+                                !ex.Message.Contains("42P01") && // relation does not exist
+                                !ex.Message.Contains("ON CONFLICT"))
                             {
                                 throw;
                             }

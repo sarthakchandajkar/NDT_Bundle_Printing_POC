@@ -252,8 +252,10 @@ namespace NDTBundlePOC.Core.Services
                         }
                         else if (_previousOKCuts == 0 && currentOKCuts > 0)
                         {
+                            // First time reading - process all existing cuts to create bundles
                             _previousOKCuts = currentOKCuts;
-                            _logger?.LogInformation($"📊 OK Pipes initialized: {currentOKCuts} total");
+                            _logger?.LogInformation($"📊 OK Pipes: +{currentOKCuts} new (Total: {currentOKCuts}) [Initial Load]");
+                            _okBundleService.ProcessOKCuts(_millId, currentOKCuts);
                         }
 
                         // Process new NDT cuts
@@ -267,8 +269,10 @@ namespace NDTBundlePOC.Core.Services
                         }
                         else if (_previousNDTCuts == 0 && currentNDTCuts > 0)
                         {
+                            // First time reading - process all existing cuts to create bundles
                             _previousNDTCuts = currentNDTCuts;
-                            _logger?.LogInformation($"📊 NDT Pipes initialized: {currentNDTCuts} total");
+                            _logger?.LogInformation($"📊 NDT Pipes: +{currentNDTCuts} new (Total: {currentNDTCuts}) [Initial Load]");
+                            _ndtBundleService.ProcessNDTCuts(_millId, currentNDTCuts);
                         }
 
                         // Check for completed bundles and print (skip first cycle)

@@ -25,10 +25,20 @@ namespace NDTBundlePOC.Core.Services
 
             // Get active PO and Slit
             var activeSlit = _repository.GetActiveSlit(0); // Get any active slit for POC
-            if (activeSlit == null) return;
+            if (activeSlit == null)
+            {
+                Console.WriteLine("⚠️  ProcessNDTCuts: No active slit found. Cannot process NDT cuts.");
+                return;
+            }
 
             var poPlan = _repository.GetPOPlan(activeSlit.PO_Plan_ID);
-            if (poPlan == null) return;
+            if (poPlan == null)
+            {
+                Console.WriteLine($"⚠️  ProcessNDTCuts: PO Plan not found for Slit ID {activeSlit.Slit_ID}, PO_Plan_ID {activeSlit.PO_Plan_ID}");
+                return;
+            }
+            
+            Console.WriteLine($"✓ ProcessNDTCuts: Found active slit {activeSlit.Slit_No} for PO {poPlan.PO_No}, processing {newNDTCuts} NDT cuts");
 
             // Get NDT Pcs per bundle from chart based on Pipe_Size
             // Parse Pipe_Size from PO_Plan (e.g., "2.5", "3.0", etc.)

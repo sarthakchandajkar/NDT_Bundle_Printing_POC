@@ -78,10 +78,20 @@ namespace NDTBundlePOC.Core.Services
 
             // Get active PO and Slit
             var activeSlit = _repository.GetActiveSlit(0);
-            if (activeSlit == null) return;
+            if (activeSlit == null)
+            {
+                Console.WriteLine("⚠️  ProcessOKCuts: No active slit found. Cannot process OK cuts.");
+                return;
+            }
 
             var poPlan = _repository.GetPOPlan(activeSlit.PO_Plan_ID);
-            if (poPlan == null) return;
+            if (poPlan == null)
+            {
+                Console.WriteLine($"⚠️  ProcessOKCuts: PO Plan not found for Slit ID {activeSlit.Slit_ID}, PO_Plan_ID {activeSlit.PO_Plan_ID}");
+                return;
+            }
+            
+            Console.WriteLine($"✓ ProcessOKCuts: Found active slit {activeSlit.Slit_No} for PO {poPlan.PO_No}, processing {newOKCuts} OK cuts");
 
             // For OK bundles, use PcsPerBundle from PO_Plan table
             int requiredOKPcs = poPlan.PcsPerBundle;
