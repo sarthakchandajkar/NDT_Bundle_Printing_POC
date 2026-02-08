@@ -31,6 +31,12 @@ using NDTBundlePOC.UI.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure logging to exclude EventLog to avoid Windows Event Log service dependency
+// This prevents "RPC server is unavailable" errors when Event Log service is not running
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 // Configure JSON serialization
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
